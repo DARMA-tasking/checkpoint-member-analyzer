@@ -9,7 +9,11 @@
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 
+#include "clang/Rewrite/Core/Rewriter.h"
+#include "clang/Frontend/CompilerInstance.h"
+
 #include <memory>
+#include <unordered_map>
 
 using namespace clang;
 using namespace clang::tooling;
@@ -34,11 +38,11 @@ static cl::extrahelp MoreHelp("\nMore help text...\n");
 DeclarationMatcher RecordMatcher = cxxRecordDecl().bind("recordDecl");
 StatementMatcher OpMatcher = binaryOperator(hasOperatorName("|")).bind("binOp");
 
+std::unordered_map<std::string, std::list<std::string>> members_to_serialize;
+
 struct ClassFuncDeclPrinter : MatchFinder::MatchCallback {
   virtual void run(const MatchFinder::MatchResult &Result) {
     if (CXXRecordDecl const *rd = Result.Nodes.getNodeAs<clang::CXXRecordDecl>("recordDecl")) {
-      //rd->dump();
-
       //printf("Traversing class %s\n", rd->getQualifiedNameAsString().c_str());
 
       bool has_serialize = false;
@@ -64,34 +68,107 @@ struct ClassFuncDeclPrinter : MatchFinder::MatchCallback {
       }
 
       if (has_serialize) {
+        auto record = rd->getQualifiedNameAsString();
         for (auto&& f : rd->fields()) {
           //f->dump();
-          printf("%s: %s\n",rd->getQualifiedNameAsString().c_str(), f->getQualifiedNameAsString().c_str());
+          auto member = f->getQualifiedNameAsString();
+          printf("%s: %s\n", record.c_str(), member.c_str());
+          members_to_serialize[record].push_back(member);
         }
-
       }
 
-      // for (auto&& m : rd->redecls()) {
-      //   m->dump();
-      // }
-      // for (auto&& m : rd->methods()) {
-      //   m->dump();
-      // }
-      // for (auto&& f : rd->fields()) {
-      //   f->dump();
-      // }
     }
   }
 };
+
+
+/*******************************************/
+
+struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
+  explicit ClassFuncDeclRewriter(Rewriter& in_rw)
+    : rw(in_rw)
+  { }
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (CXXRecordDecl const *rd = Result.Nodes.getNodeAs<clang::CXXRecordDecl>("recordDecl")) {
+      auto record = rd->getQualifiedNameAsString();
+
+      // Go through the declarations for this struct
+      for (auto&& m : rd->decls()) {
+
+        // Only look at template decls that are functions
+        if (m->isTemplateDecl()) {
+          auto fndecl = m->getAsFunction();
+          if (fndecl) {
+            if (fndecl->getNameAsString() == "serialize" and fndecl->param_size() == 1) {
+              if (fndecl->getBody() && fndecl->getBody()->child_begin() != fndecl->getBody()->child_end()) {
+                auto start = fndecl->getBody()->child_begin()->getLocStart();
+                rw.InsertText(start, "/* begin generated serialize code */\n");
+                for (auto&& elm : members_to_serialize[record]) {
+                  rw.InsertText(start, "s.check(" + elm + "," "\"" + elm + "\"" ");\n");
+                }
+                rw.InsertText(start, "/* end generated serialize code */\n");
+              }
+
+              //rw.InsertText(fndecl->getLocStart(), "test");
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Rewriter& rw;
+};
+
+struct MyASTConsumer : ASTConsumer {
+  MyASTConsumer(Rewriter& in_rw) : record_handler(in_rw) {
+    matcher_.addMatcher(RecordMatcher, &record_handler);
+  }
+
+  void HandleTranslationUnit(ASTContext& Context) override {
+    // Run the matchers when we have the whole TU parsed.
+    matcher_.matchAST(Context);
+  }
+
+private:
+  ClassFuncDeclRewriter record_handler;
+  MatchFinder matcher_;
+};
+
+// For each source file provided to the tool, a new FrontendAction is created.
+struct MyFrontendAction : ASTFrontendAction {
+  void EndSourceFileAction() override {
+    //rw_.getEditBuffer(rw_.getSourceMgr().getMainFileID()).write(llvm::outs());
+    rw_.overwriteChangedFiles();
+  }
+
+  std::unique_ptr<ASTConsumer>
+  CreateASTConsumer(CompilerInstance &CI, StringRef file) override {
+    rw_.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
+    return llvm::make_unique<MyASTConsumer>(rw_);
+  }
+
+private:
+  Rewriter rw_;
+};
+
 
 int main(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
   ClangTool Tool(OptionsParser.getCompilations(),
                  OptionsParser.getSourcePathList());
 
-  ClassFuncDeclPrinter findSerializeRecords;
-  MatchFinder Finder;
-  Finder.addMatcher(RecordMatcher, &findSerializeRecords);
+  {
+    ClassFuncDeclPrinter findSerializeRecords;
+    MatchFinder Finder;
+    Finder.addMatcher(RecordMatcher, &findSerializeRecords);
 
-  return Tool.run(newFrontendActionFactory(&Finder).get());
+    Tool.run(newFrontendActionFactory(&Finder).get());
+  }
+
+  {
+    Tool.run(newFrontendActionFactory<MyFrontendAction>().get());
+  }
+  return 0;
 }
