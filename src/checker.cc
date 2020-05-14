@@ -11,9 +11,12 @@
 
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Frontend/CompilerInstance.h"
+#include "clang/AST/ExprCXX.h"
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
+#include <fstream>
 
 using namespace clang;
 using namespace clang::tooling;
@@ -32,13 +35,26 @@ static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 // A help message for this specific tool can be added afterwards.
 static cl::extrahelp MoreHelp("\nMore help text...\n");
 
-// This doesn't work due to the template matching..
-// DeclarationMatcher RecordMatcher = cxxRecordDecl(hasMethod(hasName("serialize"))).bind("recordDecl");
-
 DeclarationMatcher RecordMatcher = cxxRecordDecl().bind("recordDecl");
-StatementMatcher OpMatcher = binaryOperator(hasOperatorName("|")).bind("binOp");
+StatementMatcher CheckMatcher = callExpr(anything()).bind("checkMatch");
 
-std::unordered_map<std::string, std::list<std::string>> members_to_serialize;
+using ListType = std::list<std::tuple<std::string, std::string>>;
+std::unordered_map<std::string, ListType> members_to_serialize;
+std::unordered_set<std::string> inserted;
+
+struct ClassFuncDeclCheckFinder : MatchFinder::MatchCallback {
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    printf("run\n");
+    if (CallExpr const *ce = Result.Nodes.getNodeAs<clang::CallExpr>("checkMatch")) {
+      if (ce->getCallee()->isTypeDependent() and ce->getNumArgs() == 2) {
+        if (ce->child_begin() != ce->child_end()) {
+          auto cxx =cast_or_null<CXXDependentScopeMemberExpr>(*ce->child_begin());
+          printf("%s\n",cxx->getMemberNameInfo().getName().getAsString().c_str());
+        }
+      }
+    }
+  }
+};
 
 struct ClassFuncDeclPrinter : MatchFinder::MatchCallback {
   virtual void run(const MatchFinder::MatchResult &Result) {
@@ -57,11 +73,6 @@ struct ClassFuncDeclPrinter : MatchFinder::MatchCallback {
           if (fndecl) {
             if (fndecl->getNameAsString() == "serialize" and fndecl->param_size() == 1) {
               has_serialize = true;
-              //fndecl->dump();
-              //fndecl->getBody()
-              // for (auto st : fndecl->getBody()->children()) {
-              //   st->dump();
-              // }
             }
           }
         }
@@ -72,8 +83,11 @@ struct ClassFuncDeclPrinter : MatchFinder::MatchCallback {
         for (auto&& f : rd->fields()) {
           //f->dump();
           auto member = f->getQualifiedNameAsString();
+          auto unqualified_member = f->getNameAsString();
           printf("%s: %s\n", record.c_str(), member.c_str());
-          members_to_serialize[record].push_back(member);
+          members_to_serialize[record].push_back(
+            std::make_tuple(unqualified_member, member)
+          );
         }
       }
 
@@ -102,12 +116,51 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
           if (fndecl) {
             if (fndecl->getNameAsString() == "serialize" and fndecl->param_size() == 1) {
               if (fndecl->getBody() && fndecl->getBody()->child_begin() != fndecl->getBody()->child_end()) {
-                auto start = fndecl->getBody()->child_begin()->getLocStart();
-                rw.InsertText(start, "/* begin generated serialize code */\n");
-                for (auto&& elm : members_to_serialize[record]) {
-                  rw.InsertText(start, "s.check(" + elm + "," "\"" + elm + "\"" ");\n");
+
+                bool already_inserted = false;
+                auto body = fndecl->getBody();
+
+#if 0
+                for (auto iter = body->child_begin(); iter != body->child_end(); ++iter) {
+                  if (iter->getStmtClass() == Stmt::StmtClass::CallExprClass) {
+                    auto ce = cast_or_null<CallExpr>(*iter);
+
+                    //printf("FOUND CE %s\n", record.c_str());
+
+                    if (ce && ce->getCallee()->isTypeDependent() and ce->getNumArgs() == 2) {
+                      if (ce->child_begin() != ce->child_end()) {
+                        auto cxx = cast_or_null<CXXDependentScopeMemberExpr>(*ce->child_begin());
+                        if (cxx->getMemberNameInfo().getName().getAsString() == "check") {
+                          already_inserted = true;
+                        }
+                        // printf(
+                        //   "FOUND in %s: %s\n",
+                        //   record.c_str(),
+                        //   cxx->getMemberNameInfo().getName().getAsString().c_str()
+                        // );
+                      }
+                    }
+                  }
                 }
-                rw.InsertText(start, "/* end generated serialize code */\n");
+#endif
+
+                if (not already_inserted) {
+                  if (inserted.find(record) == inserted.end()) {
+                    printf("inserting for: %s\n", record.c_str());
+                    inserted.insert(record);
+
+                    auto start = body->getLocEnd();
+                    //auto start = place->getLocStart();
+                    rw.InsertText(start, "/* begin generated serialize code */\n");
+                    for (auto&& elm : members_to_serialize[record]) {
+                      rw.InsertText(
+                        start,
+                        "s.check(" + std::get<0>(elm) + "," "\"" + std::get<1>(elm) + "\"" ");\n"
+                      );
+                    }
+                    rw.InsertText(start, "/* end generated serialize code */\n");
+                  }
+                }
               }
 
               //rw.InsertText(fndecl->getLocStart(), "test");
@@ -141,6 +194,16 @@ struct MyFrontendAction : ASTFrontendAction {
   void EndSourceFileAction() override {
     //rw_.getEditBuffer(rw_.getSourceMgr().getMainFileID()).write(llvm::outs());
     rw_.overwriteChangedFiles();
+
+    printf("writing file\n");
+    std::ofstream file("/Users/jliffla/output.txt");
+    if (not file.good()) {
+      printf("FAIL writing file\n");
+    }
+    for (auto&& elm : inserted) {
+      file << elm << "\n";
+    }
+    file.close();
   }
 
   std::unique_ptr<ASTConsumer>
@@ -158,6 +221,27 @@ int main(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
   ClangTool Tool(OptionsParser.getCompilations(),
                  OptionsParser.getSourcePathList());
+
+#if 0
+  {
+    ClassFuncDeclCheckFinder findChecker;
+    MatchFinder Finder;
+    Finder.addMatcher(CheckMatcher, &findChecker);
+
+    Tool.run(newFrontendActionFactory(&Finder).get());
+  }
+#endif
+
+  {
+    std::ifstream input("/Users/jliffla/output.txt");
+    if (input.good()) {
+      while (not input.eof()) {
+        std::string elm;
+        input >> elm;
+        inserted.insert(elm);
+      }
+    }
+  }
 
   {
     ClassFuncDeclPrinter findSerializeRecords;
