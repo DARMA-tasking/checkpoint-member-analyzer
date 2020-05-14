@@ -16,6 +16,7 @@
 #include <memory>
 #include <list>
 #include <tuple>
+#include <unordered_set>
 
 using namespace clang;
 using namespace clang::tooling;
@@ -52,7 +53,7 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
       FunctionDecl* fndecl = nullptr;
       bool has_serialize = false;
-      bool already_contains_checks = false;
+      std::unordered_set<std::string> existing_checks_;
 
       // Go through the declarations for this struct
       for (auto&& m : rd->decls()) {
@@ -76,12 +77,23 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
                   if (isa<CallExpr>(child)) {
                     auto ce = cast<CallExpr>(child);
                     if (ce && ce->getCallee()->isTypeDependent() and ce->getNumArgs() == 2) {
-                      if (ce->child_begin() != ce->child_end()) {
-                        if (isa<CXXDependentScopeMemberExpr>(*ce->child_begin())) {
-                          auto cxx = cast<CXXDependentScopeMemberExpr>(*ce->child_begin());
+                      auto expr_iter = ce->child_begin();
+                      if (expr_iter != ce->child_end()) {
+                        if (isa<CXXDependentScopeMemberExpr>(*expr_iter)) {
+                          auto cxx = cast<CXXDependentScopeMemberExpr>(*expr_iter);
                           if (cxx->getMemberNameInfo().getName().getAsString() == "check") {
-                            //cxx->dump();
-                            already_contains_checks = true;
+                            //ce->dump();
+                            expr_iter++;
+
+                            // Store a list of checks that already exist to
+                            // compare to members to see if the existing checks
+                            // are valid!
+                            if (isa<MemberExpr>(*expr_iter)) {
+                              auto member = cast<MemberExpr>(*expr_iter);
+                              existing_checks_.insert(
+                                member->getMemberDecl()->getNameAsString()
+                              );
+                            }
                           }
                         }
                       }
@@ -98,35 +110,44 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
         return;
       }
 
-      if (not already_contains_checks) {
-        std::list<std::tuple<std::string, std::string>> members_to_serialize;
+      std::list<std::tuple<std::string, std::string>> members_to_serialize;
 
-        auto record = rd->getQualifiedNameAsString();
-        //printf("Processing record %s\n", record.c_str());
-        for (auto&& f : rd->fields()) {
-          auto member = f->getQualifiedNameAsString();
-          auto unqualified_member = f->getNameAsString();
+      auto record = rd->getQualifiedNameAsString();
+      //printf("Finding fields for CXX record %s\n", record.c_str());
+      for (auto&& f : rd->fields()) {
+        auto member = f->getQualifiedNameAsString();
+        auto unqualified_member = f->getNameAsString();
+
+        auto existing_iter = existing_checks_.find(unqualified_member);
+        if (existing_iter == existing_checks_.end()) {
           printf("%s: %s\n", record.c_str(), member.c_str());
           f->dumpColor();
           members_to_serialize.push_back(std::make_tuple(unqualified_member, member));
         }
+      }
 
+      if (not fndecl->hasBody() and members_to_serialize.size() > 0) {
+        printf(
+          "%s: %zu members exist, but no serialize body found!\n",
+          record.c_str(), members_to_serialize.size()
+        );
+        return;
+      }
 
-        if (members_to_serialize.size() > 0) {
-          if (fndecl->hasBody()) {
-            printf("inserting for: %s\n", record.c_str());
-            auto body = fndecl->getBody();
+      if (members_to_serialize.size() > 0) {
+        if (fndecl->hasBody()) {
+          printf("Inserting new checks for: %s\n", record.c_str());
+          auto body = fndecl->getBody();
 
-            auto start = body->getLocEnd();
-            rw.InsertText(start, "/* begin generated serialize check code */\n");
-            for (auto&& elm : members_to_serialize) {
-              rw.InsertText(
-                start,
-                "s.check(" + std::get<0>(elm) + "," "\"" + std::get<1>(elm) + "\"" ");\n"
-              );
-            }
-            rw.InsertText(start, "/* end generated serialize check code */\n");
+          auto start = body->getLocEnd();
+          rw.InsertText(start, "/* begin generated serialize check code */\n");
+          for (auto&& elm : members_to_serialize) {
+            rw.InsertText(
+              start,
+              "s.check(" + std::get<0>(elm) + "," "\"" + std::get<1>(elm) + "\"" ");\n"
+            );
           }
+          rw.InsertText(start, "/* end generated serialize check code */\n");
         }
       }
     }
