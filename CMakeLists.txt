@@ -99,5 +99,5 @@ target_link_libraries(
 )
 
 target_link_libraries(
-  checker PUBLIC clangASTMatchers
+  checker PUBLIC clangASTMatchers clangToolingCore
 )
