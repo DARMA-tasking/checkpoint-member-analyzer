@@ -140,14 +140,15 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
           auto body = fndecl->getBody();
 
           auto start = body->getLocEnd();
-          rw.InsertText(start, "/* begin generated serialize check code */\n");
+          rw.InsertText(start, "  /* begin generated serialize check code */\n", true, true);
           for (auto&& elm : members_to_serialize) {
             rw.InsertText(
               start,
-              "s.check(" + std::get<0>(elm) + "," "\"" + std::get<1>(elm) + "\"" ");\n"
+              "  s.check(" + std::get<0>(elm) + "," "\"" + std::get<1>(elm) + "\"" ");\n",
+              true, true
             );
           }
-          rw.InsertText(start, "/* end generated serialize check code */\n");
+          rw.InsertText(start, "  /* end generated serialize check code */\n", true, true);
         }
       }
     }
