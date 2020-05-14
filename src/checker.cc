@@ -14,9 +14,8 @@
 #include "clang/AST/ExprCXX.h"
 
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
-#include <fstream>
+#include <list>
+#include <tuple>
 
 using namespace clang;
 using namespace clang::tooling;
@@ -36,67 +35,6 @@ static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::extrahelp MoreHelp("\nMore help text...\n");
 
 DeclarationMatcher RecordMatcher = cxxRecordDecl().bind("recordDecl");
-StatementMatcher CheckMatcher = callExpr(anything()).bind("checkMatch");
-
-using ListType = std::list<std::tuple<std::string, std::string>>;
-std::unordered_map<std::string, ListType> members_to_serialize;
-std::unordered_set<std::string> inserted;
-
-struct ClassFuncDeclCheckFinder : MatchFinder::MatchCallback {
-  virtual void run(const MatchFinder::MatchResult &Result) {
-    printf("run\n");
-    if (CallExpr const *ce = Result.Nodes.getNodeAs<clang::CallExpr>("checkMatch")) {
-      if (ce->getCallee()->isTypeDependent() and ce->getNumArgs() == 2) {
-        if (ce->child_begin() != ce->child_end()) {
-          auto cxx =cast_or_null<CXXDependentScopeMemberExpr>(*ce->child_begin());
-          printf("%s\n",cxx->getMemberNameInfo().getName().getAsString().c_str());
-        }
-      }
-    }
-  }
-};
-
-struct ClassFuncDeclPrinter : MatchFinder::MatchCallback {
-  virtual void run(const MatchFinder::MatchResult &Result) {
-    if (CXXRecordDecl const *rd = Result.Nodes.getNodeAs<clang::CXXRecordDecl>("recordDecl")) {
-      //printf("Traversing class %s\n", rd->getQualifiedNameAsString().c_str());
-
-      bool has_serialize = false;
-
-      // Go through the declarations for this struct
-      for (auto&& m : rd->decls()) {
-        //printf("DECL %s\n", m->getDeclKindName());
-
-        // Only look at template decls that are functions
-        if (m->isTemplateDecl()) {
-          auto fndecl = m->getAsFunction();
-          if (fndecl) {
-            if (fndecl->getNameAsString() == "serialize" and fndecl->param_size() == 1) {
-              has_serialize = true;
-            }
-          }
-        }
-      }
-
-      if (has_serialize) {
-        auto record = rd->getQualifiedNameAsString();
-        for (auto&& f : rd->fields()) {
-          //f->dump();
-          auto member = f->getQualifiedNameAsString();
-          auto unqualified_member = f->getNameAsString();
-          printf("%s: %s\n", record.c_str(), member.c_str());
-          members_to_serialize[record].push_back(
-            std::make_tuple(unqualified_member, member)
-          );
-        }
-      }
-
-    }
-  }
-};
-
-
-/*******************************************/
 
 struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
   explicit ClassFuncDeclRewriter(Rewriter& in_rw)
@@ -105,66 +43,89 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
   virtual void run(const MatchFinder::MatchResult &Result) {
     if (CXXRecordDecl const *rd = Result.Nodes.getNodeAs<clang::CXXRecordDecl>("recordDecl")) {
-      auto record = rd->getQualifiedNameAsString();
+      //printf("Traversing class %s\n", rd->getQualifiedNameAsString().c_str());
+
+      // We are in a template instantiation--skip!
+      if (rd->getTemplateInstantiationPattern() != nullptr) {
+        return;
+      }
+
+      FunctionDecl* fndecl = nullptr;
+      bool has_serialize = false;
+      bool already_contains_checks = false;
 
       // Go through the declarations for this struct
       for (auto&& m : rd->decls()) {
+        //printf("DECL %s\n", m->getDeclKindName());
 
-        // Only look at template decls that are functions
+        // Look for template decls, named serialize, with exactly one parameter
+        // (intrusive) serialize
         if (m->isTemplateDecl()) {
-          auto fndecl = m->getAsFunction();
-          if (fndecl) {
-            if (fndecl->getNameAsString() == "serialize" and fndecl->param_size() == 1) {
-              if (fndecl->getBody() && fndecl->getBody()->child_begin() != fndecl->getBody()->child_end()) {
+          auto cur_fndecl = m->getAsFunction();
+          if (cur_fndecl) {
+            if (cur_fndecl->getNameAsString() == "serialize" and cur_fndecl->param_size() == 1) {
+              // Save this function decl so we can insert code later
+              fndecl = cur_fndecl;
+              has_serialize = true;
 
-                bool already_inserted = false;
+              // If we have a body the serialize member function, walk it
+              if (fndecl->hasBody()) {
                 auto body = fndecl->getBody();
-
-#if 0
-                for (auto iter = body->child_begin(); iter != body->child_end(); ++iter) {
-                  if (iter->getStmtClass() == Stmt::StmtClass::CallExprClass) {
-                    auto ce = cast_or_null<CallExpr>(*iter);
-
-                    //printf("FOUND CE %s\n", record.c_str());
-
+                for (auto&& child : body->children()) {
+                  // Look for CallExpr
+                  if (isa<CallExpr>(child)) {
+                    auto ce = cast<CallExpr>(child);
                     if (ce && ce->getCallee()->isTypeDependent() and ce->getNumArgs() == 2) {
                       if (ce->child_begin() != ce->child_end()) {
-                        auto cxx = cast_or_null<CXXDependentScopeMemberExpr>(*ce->child_begin());
-                        if (cxx->getMemberNameInfo().getName().getAsString() == "check") {
-                          already_inserted = true;
+                        if (isa<CXXDependentScopeMemberExpr>(*ce->child_begin())) {
+                          auto cxx = cast<CXXDependentScopeMemberExpr>(*ce->child_begin());
+                          if (cxx->getMemberNameInfo().getName().getAsString() == "check") {
+                            //cxx->dump();
+                            already_contains_checks = true;
+                          }
                         }
-                        // printf(
-                        //   "FOUND in %s: %s\n",
-                        //   record.c_str(),
-                        //   cxx->getMemberNameInfo().getName().getAsString().c_str()
-                        // );
                       }
                     }
                   }
                 }
-#endif
-
-                if (not already_inserted) {
-                  if (inserted.find(record) == inserted.end()) {
-                    printf("inserting for: %s\n", record.c_str());
-                    inserted.insert(record);
-
-                    auto start = body->getLocEnd();
-                    //auto start = place->getLocStart();
-                    rw.InsertText(start, "/* begin generated serialize code */\n");
-                    for (auto&& elm : members_to_serialize[record]) {
-                      rw.InsertText(
-                        start,
-                        "s.check(" + std::get<0>(elm) + "," "\"" + std::get<1>(elm) + "\"" ");\n"
-                      );
-                    }
-                    rw.InsertText(start, "/* end generated serialize code */\n");
-                  }
-                }
               }
-
-              //rw.InsertText(fndecl->getLocStart(), "test");
             }
+          }
+        }
+      }
+
+      if (not has_serialize) {
+        return;
+      }
+
+      if (not already_contains_checks) {
+        std::list<std::tuple<std::string, std::string>> members_to_serialize;
+
+        auto record = rd->getQualifiedNameAsString();
+        //printf("Processing record %s\n", record.c_str());
+        for (auto&& f : rd->fields()) {
+          auto member = f->getQualifiedNameAsString();
+          auto unqualified_member = f->getNameAsString();
+          printf("%s: %s\n", record.c_str(), member.c_str());
+          f->dumpColor();
+          members_to_serialize.push_back(std::make_tuple(unqualified_member, member));
+        }
+
+
+        if (members_to_serialize.size() > 0) {
+          if (fndecl->hasBody()) {
+            printf("inserting for: %s\n", record.c_str());
+            auto body = fndecl->getBody();
+
+            auto start = body->getLocEnd();
+            rw.InsertText(start, "/* begin generated serialize check code */\n");
+            for (auto&& elm : members_to_serialize) {
+              rw.InsertText(
+                start,
+                "s.check(" + std::get<0>(elm) + "," "\"" + std::get<1>(elm) + "\"" ");\n"
+              );
+            }
+            rw.InsertText(start, "/* end generated serialize check code */\n");
           }
         }
       }
@@ -194,16 +155,6 @@ struct MyFrontendAction : ASTFrontendAction {
   void EndSourceFileAction() override {
     //rw_.getEditBuffer(rw_.getSourceMgr().getMainFileID()).write(llvm::outs());
     rw_.overwriteChangedFiles();
-
-    printf("writing file\n");
-    std::ofstream file("/Users/jliffla/output.txt");
-    if (not file.good()) {
-      printf("FAIL writing file\n");
-    }
-    for (auto&& elm : inserted) {
-      file << elm << "\n";
-    }
-    file.close();
   }
 
   std::unique_ptr<ASTConsumer>
@@ -222,37 +173,6 @@ int main(int argc, const char **argv) {
   ClangTool Tool(OptionsParser.getCompilations(),
                  OptionsParser.getSourcePathList());
 
-#if 0
-  {
-    ClassFuncDeclCheckFinder findChecker;
-    MatchFinder Finder;
-    Finder.addMatcher(CheckMatcher, &findChecker);
-
-    Tool.run(newFrontendActionFactory(&Finder).get());
-  }
-#endif
-
-  {
-    std::ifstream input("/Users/jliffla/output.txt");
-    if (input.good()) {
-      while (not input.eof()) {
-        std::string elm;
-        input >> elm;
-        inserted.insert(elm);
-      }
-    }
-  }
-
-  {
-    ClassFuncDeclPrinter findSerializeRecords;
-    MatchFinder Finder;
-    Finder.addMatcher(RecordMatcher, &findSerializeRecords);
-
-    Tool.run(newFrontendActionFactory(&Finder).get());
-  }
-
-  {
-    Tool.run(newFrontendActionFactory<MyFrontendAction>().get());
-  }
+  Tool.run(newFrontendActionFactory<MyFrontendAction>().get());
   return 0;
 }
