@@ -325,11 +325,6 @@ struct MyFrontendAction : ASTFrontendAction {
     //rw_.getEditBuffer(rw_.getSourceMgr().getMainFileID()).write(llvm::outs());
     //rw_.getSourceMgr().getMainFileID()
 
-    if (OutputMainFile) {
-      auto buf = rw_.getSourceMgr().getBufferData(rw_.getSourceMgr().getMainFileID());
-      fprintf(out, "%s", buf.str().c_str());
-    }
-
     auto& sm = rw_.getSourceMgr();
     for (auto iter = rw_.buffer_begin(); iter != rw_.buffer_end(); ++iter) {
       fprintf(
@@ -344,6 +339,12 @@ struct MyFrontendAction : ASTFrontendAction {
   std::unique_ptr<ASTConsumer>
   CreateASTConsumer(CompilerInstance &CI, StringRef file) override {
     rw_.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
+
+    if (OutputMainFile) {
+      auto buf = rw_.getSourceMgr().getBufferData(rw_.getSourceMgr().getMainFileID());
+      fprintf(out, "%s", buf.str().c_str());
+    }
+
     return llvm::make_unique<MyASTConsumer>(rw_);
   }
 
