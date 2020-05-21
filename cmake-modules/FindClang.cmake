@@ -48,7 +48,7 @@ set(KNOWN_VERSIONS 10 9 8 7 6.0 5.0 4.0 3.9 3.8)
 #     endif()
 # endif()
 
-find_package(LLVM)
+find_package(LLVM 5)
 
 set(CLANG_FOUND FALSE)
 
