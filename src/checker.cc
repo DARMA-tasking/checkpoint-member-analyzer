@@ -39,6 +39,8 @@ static cl::opt<bool> GenerateInline("inline", cl::desc("Generate code inline and
 
 static cl::opt<bool> OutputMainFile("main", cl::desc("Output main file with generated code"));
 
+static cl::opt<bool> IncludeVTHeader("Ivt", cl::desc("Include VT headers in generated code"));
+
 DeclarationMatcher RecordMatcher = cxxRecordDecl().bind("recordDecl");
 
 struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
@@ -374,6 +376,10 @@ int main(int argc, const char **argv) {
     out = stdout;
   } else {
     out = fopen(Filename.c_str(), "w");
+  }
+
+  if (IncludeVTHeader) {
+    fprintf(out, "#include <vt/transport.h>\n");
   }
 
   for (auto&& e : Includes) {
