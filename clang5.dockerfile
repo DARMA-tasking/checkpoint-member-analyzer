@@ -43,4 +43,4 @@ RUN ln -s \
 
 RUN /serialization-sanitizer/build.sh /serialization-sanitizer /build
 
-ENTRYPOINT ["/build/serialization-sanitizer/checker"]
+ENTRYPOINT ["/build/serialization-sanitizer/sanitizer"]
