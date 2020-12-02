@@ -6,7 +6,7 @@ source_dir=${1}
 build_dir=${2}
 
 export CH=${source_dir}
-export CH_BUILD=${build_dir}/checkpoint-member-analyzer
+export CH_BUILD=${build_dir}/serialization-sanitizer
 mkdir -p "$CH_BUILD"
 cd "$CH_BUILD"
 rm -Rf ./*

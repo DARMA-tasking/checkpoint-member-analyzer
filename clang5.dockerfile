@@ -35,12 +35,12 @@ ENV CC=${compiler} \
     CXX=clang++
 
 FROM base as build
-COPY . /checkpoint-member-analyzer
+COPY . /serialization-sanitizer
 
 RUN ln -s \
     /usr/bin/llvm-config-5.0 \
     /usr/bin/llvm-config
 
-RUN /checkpoint-member-analyzer/build.sh /checkpoint-member-analyzer /build
+RUN /serialization-sanitizer/build.sh /serialization-sanitizer /build
 
-ENTRYPOINT ["/build/checkpoint-member-analyzer/checker"]
+ENTRYPOINT ["/build/serialization-sanitizer/checker"]
