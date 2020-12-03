@@ -74,3 +74,8 @@ target_link_libraries(
 target_link_libraries(
   sanitizer PUBLIC clangASTMatchers clangToolingCore clangLex clangParse clangSema
 )
+
+install(
+  TARGETS sanitizer
+  RUNTIME DESTINATION bin
+)
