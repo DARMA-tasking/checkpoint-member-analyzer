@@ -58,4 +58,21 @@ docker-compose up
 
 ```shell
 docker-compose run sanitizer-base
+# /serialization-sanitizer/workflows/build_cpp.sh /serialization-sanitizer /build
+```
+
+## Running
+
+Once the `sanitizer` binary is built, it can be run on a C++ file with a JSON
+compilation database so it knows how to compile the C++ file (includes, flags,
+etc).
+
+A compilation database can be generated for a cmake project by defining a cmake
+variable for that project. Set `-DCMAKE_EXPORT_COMPILE_COMMANDS=1` while
+configuring the project that is going to be sanitized.
+
+### Example
+```shell
+./sanitizer -p <json-compilation-database> <cc-file> -extra-arg=-std=c++1y
+
 ```
