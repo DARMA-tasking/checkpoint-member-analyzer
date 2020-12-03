@@ -69,7 +69,9 @@ etc).
 
 A compilation database can be generated for a cmake project by defining a cmake
 variable for that project. Set `-DCMAKE_EXPORT_COMPILE_COMMANDS=1` while
-configuring the project that is going to be sanitized.
+configuring the project that is going to be sanitized. When that variable is
+set, the JSON compilation database will be generated in the cmake build
+directory with the file name `compile_commands.json`.
 
 ### Example
 ```shell
