@@ -1,0 +1,36 @@
+
+version: '3.5'
+
+volumes:
+  sanitizer-shared-file-system:
+    driver: local
+  sanitizer-cache:
+    driver: local
+
+# Define rules for bvh configuration options across various services
+x-sanitizeropts: &sanitizeropts
+  CMAKE_BUILD_TYPE: ${BUILD_TYPE:-release}
+  https_proxy: ${PROXY-}
+  http_proxy: ${PROXY-}
+  VT_ROOT: ${VT_ROOT:-/vt/install}
+
+services:
+
+  vt-base:
+    image: lifflander1/vt:develop
+    build: https://github.com/DARMA-tasking/vt.git
+    volumes:
+      - sanitizer-shared-file-system:/build/vt:delegated
+
+  sanitizer-base:
+    image: lifflander1/sanitizer-base-image:latest
+    build:
+      context: .
+      target: base
+      dockerfile: workflows/ubuntu-18.04-clang-cpp.dockerfile
+    environment:
+      <<: *sanitizeropts
+    volumes:
+      - sanitizer-shared-file-system:/vt:delegated
+      - .:/serialization-sanitizer:delegated
+      - sanitizer-cache:/build:delegated
