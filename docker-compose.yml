@@ -11,12 +11,11 @@ volumes:
   vt-cache:
     driver: local
 
-# Define rules for bvh configuration options across various services
+# Define rules for sanitizer configuration options across various services
 x-sanitizeropts: &sanitizeropts
   CMAKE_BUILD_TYPE: ${BUILD_TYPE:-release}
   https_proxy: ${PROXY-}
   http_proxy: ${PROXY-}
-  VT_ROOT: ${VT_ROOT:-/vt/install}
 
 services:
 
