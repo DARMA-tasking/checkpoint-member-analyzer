@@ -28,6 +28,10 @@ services:
       context: .
       target: base
       dockerfile: workflows/ubuntu-18.04-clang-cpp.dockerfile
+      args: &default-args
+        arch: ${ARCH}
+        proxy: ${PROXY}
+        compiler: ${COMPILER}
     environment:
       <<: *sanitizeropts
     volumes:
