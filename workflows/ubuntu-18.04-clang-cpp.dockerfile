@@ -43,4 +43,4 @@ COPY . /serialization-sanitizer
 
 RUN /serialization-sanitizer/workflows/build_cpp.sh /serialization-sanitizer /build
 
-ENTRYPOINT ["/build/serialization-sanitizer/sanitizer"]
+# ENTRYPOINT ["/build/serialization-sanitizer/sanitizer"]

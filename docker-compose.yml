@@ -6,8 +6,6 @@ volumes:
     driver: local
   vt-src:
     driver: local
-  sanitizer-cache:
-    driver: local
   vt-cache:
     driver: local
 
@@ -44,5 +42,7 @@ services:
     volumes:
       - shared-file-system:/build/serialization-sanitizer:delegated
       - .:/serialization-sanitizer:delegated
-      - sanitizer-cache:/build:delegated
       - vt-src:/vt:delegated
+    command:
+      /bin/bash -c "
+        /serialization-sanitizer/workflows/build_cpp.sh /serialization-sanitizer /build"
