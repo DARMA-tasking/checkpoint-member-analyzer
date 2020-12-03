@@ -28,16 +28,12 @@ directory after cloning from git.
 export COMPILER=clang-7
 ```
 
-- Fetch the latest VT develop image.
+- Build the latest VT develop image with the selected Clang compiler. If that
+  image as been uploaded it may be alternatively fetched from Docker Hub.
 
 ```shell
-docker-compose pull vt-base
+docker-compose build vt-base
 ```
-
-This will download the latest image that was uploaded to Docker Hub, which
-automatically updates instigated from a GitHub workflow in the DARMA/*vt*
-repository that runs when code is merged into *vt*'s develop branch and it
-builds correctly and passes all tests.
 
 - **Optional**: fetch the sanitizer base image (Clang frontend tooling and
   associated dependencies) if the clang compiler version exists. If it doesn't
@@ -54,11 +50,16 @@ docker-compose pull sanitizer-base
 docker-compose up
 ```
 
-- Launch the sanitizer container interactively:
+- Compile and build the latest sanitizer code:
 
 ```shell
 docker-compose run sanitizer-base
-# /serialization-sanitizer/workflows/build_cpp.sh /serialization-sanitizer /build
+```
+
+- Launch the VT container interactively with the sanitizer built:
+
+```shell
+docker-compose run vt-base
 ```
 
 ## Running
@@ -67,13 +68,17 @@ Once the `sanitizer` binary is built, it can be run on a C++ file with a JSON
 compilation database so it knows how to compile the C++ file (includes, flags,
 etc).
 
+```shell
+# /serialization-sanitizer/sanitizer /build/vt/compile-comands.json /vt/examples/hello_world.cc
+```
+
 A compilation database can be generated for a cmake project by defining a cmake
 variable for that project. Set `-DCMAKE_EXPORT_COMPILE_COMMANDS=1` while
 configuring the project that is going to be sanitized. When that variable is
 set, the JSON compilation database will be generated in the cmake build
 directory with the file name `compile_commands.json`.
 
-### Example
+### Command template
 ```shell
 ./sanitizer -p <json-compilation-database> <cc-file> -extra-arg=-std=c++1y
 
