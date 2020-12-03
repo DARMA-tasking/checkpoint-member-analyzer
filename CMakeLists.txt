@@ -33,13 +33,13 @@ add_subdirectory(lib/fmt)
 file(
   GLOB
   HEADER_FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/sanitizer/*.h
 )
 
 file(
   GLOB
   SOURCE_FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/sanitizer/*.cc
 )
 add_executable(
   sanitizer
