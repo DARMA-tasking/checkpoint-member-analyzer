@@ -27,6 +27,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake-mo
 
 find_package(Clang REQUIRED)
 
+# include fmt in the build
+add_subdirectory(lib/fmt)
+
 file(
   GLOB
   HEADER_FILES
@@ -44,6 +47,16 @@ add_executable(
 )
 
 install(FILES ${HEADER_FILES} DESTINATION include)
+
+target_compile_definitions(
+  sanitizer PUBLIC FMT_HEADER_ONLY=1 FMT_USE_USER_DEFINED_LITERALS=0
+)
+target_include_directories(
+  sanitizer PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fmt>
+  $<INSTALL_INTERFACE:include/fmt>
+)
+
 
 # target_include_directories(
 #   ${SERIALIZATION_SANITIZER_LIBRARY} PUBLIC
