@@ -18,6 +18,8 @@
 #include <tuple>
 #include <unordered_set>
 
+#include <fmt/format.h>
+
 #include "qualified_name.h"
 
 using namespace clang;
@@ -49,7 +51,7 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
   virtual void run(const MatchFinder::MatchResult &Result) {
     if (CXXRecordDecl const *rd = Result.Nodes.getNodeAs<clang::CXXRecordDecl>("recordDecl")) {
-      //printf("Traversing class %s\n", rd->getQualifiedNameAsString().c_str());
+      // fmt::print("Traversing class {}\n", rd->getQualifiedNameAsString());
 
       // We are in a template instantiation--skip!
       if (GenerateInline) {
@@ -71,7 +73,7 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
       // Go through the declarations for this struct
       for (auto&& m : rd->decls()) {
-        //printf("DECL %s\n", m->getDeclKindName());
+        //fmt::print("DECL {}\n", m->getDeclKindName());
 
         // Look for template decls, named serialize, with exactly one parameter
         // (intrusive) serialize
@@ -127,14 +129,14 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
       MemberListType members_to_serialize;
 
       auto record = rd->getQualifiedNameAsString();
-      //printf("Finding fields for CXX record %s\n", record.c_str());
+      //fmt::print("Finding fields for CXX record {}\n", record);
       for (auto&& f : rd->fields()) {
         auto member = f->getQualifiedNameAsString();
         auto unqualified_member = f->getNameAsString();
 
         auto existing_iter = existing_checks_.find(unqualified_member);
         if (existing_iter == existing_checks_.end()) {
-          //printf("%s: %s\n", record.c_str(), member.c_str());
+          //fmt::print("{}: {}\n", record, member);
           //f->dumpColor();
           members_to_serialize.push_back(std::make_tuple(unqualified_member, member));
         }
@@ -142,9 +144,10 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
       if (GenerateInline) {
         if (not fndecl->hasBody() and members_to_serialize.size() > 0) {
-          printf(
-            "%s: %zu members exist, but no serialize body found!\n",
-            record.c_str(), members_to_serialize.size()
+          fmt::print(
+            stderr,
+            "{}: {} members exist, but no serialize body found!\n",
+            record, members_to_serialize.size()
           );
           return;
         }
@@ -165,7 +168,7 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
   ) {
     if (fn->hasBody()) {
       auto record = rd->getQualifiedNameAsString();
-      printf("Inserting new checks for: %s\n", record.c_str());
+      fmt::print("Inserting new checks for: %s\n", record.c_str());
       auto body = fn->getBody();
 
       auto start = body->getLocEnd();
@@ -185,19 +188,19 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
     CXXDeclType rd, FunctionDecl* fn, MemberListType const& members
   ) {
     //rd->dump();
-    //printf("%s: SPECIALIZATION: %d\n", rd->getQualifiedNameAsString().c_str(), rd->getTemplateSpecializationKind());
+    //fmt::print("{}: SPECIALIZATION: {}\n", rd->getQualifiedNameAsString(), rd->getTemplateSpecializationKind());
 
     TemplateSpecializationKind kind = rd->getTemplateSpecializationKind();
 
     if (kind == TemplateSpecializationKind::TSK_Undeclared) {
       auto qual_name = rd->getQualifiedNameAsString();
 
-      fprintf(out,"template <>\n");
-      fprintf(out,"void %s::serialize<checkpoint::dispatch::Counter>(checkpoint::dispatch::Counter& s) {\n", qual_name.c_str());
+      fmt::print(out,"template <>\n");
+      fmt::print(out,"void {}::serialize<checkpoint::dispatch::Counter>(checkpoint::dispatch::Counter& s) {\n", qual_name);
       for (auto&& m : members) {
-        fprintf(out,"\ts.check(%s, \"%s\");\n", std::get<0>(m).c_str(), std::get<1>(m).c_str());
+        fmt::print(out,"\ts.check({}, \"{}\");\n", std::get<0>(m), std::get<1>(m));
       }
-      fprintf(out,"}\n");
+      fmt::print(out,"}\n");
     } else if (kind == TemplateSpecializationKind::TSK_ImplicitInstantiation) {
       if (isa<ClassTemplateSpecializationDecl>(rd)) {
         auto ctsd = cast<ClassTemplateSpecializationDecl>(rd);
@@ -214,14 +217,14 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
         std::string qualified_type_outer = qt.getAsString(policy);
 
-        fprintf(out,"template <>\n");
-        fprintf(out,"template <>\n");
-        fprintf(out,"void %s::serialize<checkpoint::dispatch::Counter>(checkpoint::dispatch::Counter& s) {\n",
-                qualified_type_outer.c_str());
+        fmt::print(out,"template <>\n");
+        fmt::print(out,"template <>\n");
+        fmt::print(out,"void {}::serialize<checkpoint::dispatch::Counter>(checkpoint::dispatch::Counter& s) {\n",
+                   qualified_type_outer);
         for (auto&& m : members) {
-          fprintf(out,"\ts.check(%s, \"%s\");\n", std::get<0>(m).c_str(), std::get<1>(m).c_str());
+          fmt::print(out,"\ts.check({}, \"{}\");\n", std::get<0>(m), std::get<1>(m));
         }
-        fprintf(out,"}\n");
+        fmt::print(out,"}\n");
       }
     }
   }
@@ -240,7 +243,7 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
         if (isa<TemplateTypeParmDecl>(tparam)) {
           auto type_param = cast<TemplateTypeParmDecl>(tparam);
           auto pack_str = type_param->isParameterPack() ? "..." : "";
-          printf("TYPE TPARAM: %s\n", tparam->getNameAsString().c_str());
+          fmt::print("TYPE TPARAM: {}\n", tparam->getNameAsString());
           templates_decl.push_back(std::string("typename ") + pack_str + type_param->getName().str());
           templates_def.push_back(type_param->getName().str());
           tparam->dump();
@@ -263,7 +266,7 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
       }
     }
 
-    //printf("TEMPLATE: %s\n", template_str.c_str())
+    //fmt::print("TEMPLATE: {}\n", template_str)
 
     std::string template_decl_context = "";
     for (auto&& elm : templates_decl) {
@@ -288,15 +291,15 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
     auto qual_name = rd->getQualifiedNameAsString();
 
-    printf("template <typename SerializerT%s>\n", template_decl_context.c_str());
-    printf(
-      "void serializeCheck(SerializerT& s, %s%s& obj) {\n",
-      qual_name.c_str(), template_def_context.c_str()
+    fmt::print("template <typename SerializerT{}>\n", template_decl_context);
+    fmt::print(
+      "void serializeCheck(SerializerT& s, {}{}& obj) {\n",
+      qual_name, template_def_context
     );
     for (auto&& m : members) {
-      printf("\ts.check(obj.%s, \"%s\");\n", std::get<0>(m).c_str(), std::get<1>(m).c_str());
+      fmt::print("\ts.check(obj.{}, \"{}\");\n", std::get<0>(m), std::get<1>(m));
     }
-    printf("}\n\n");
+    fmt::print("}\n\n");
   }
 
   Rewriter& rw;
@@ -325,7 +328,7 @@ struct MyFrontendAction : ASTFrontendAction {
 
     auto& sm = rw_.getSourceMgr();
     for (auto iter = rw_.buffer_begin(); iter != rw_.buffer_end(); ++iter) {
-      fprintf(
+      fmt::print(
         stderr, "Modified file %s\n",
         sm.getFileEntryForID(iter->first)->getName().str().c_str()
       );
@@ -340,7 +343,7 @@ struct MyFrontendAction : ASTFrontendAction {
 
     if (OutputMainFile) {
       auto buf = rw_.getSourceMgr().getBufferData(rw_.getSourceMgr().getMainFileID());
-      fprintf(out, "%s", buf.str().c_str());
+      fmt::print(out, "{}", buf.str());
     }
 
     return llvm::make_unique<MyASTConsumer>(rw_);
@@ -375,14 +378,14 @@ int main(int argc, const char **argv) {
   }
 
   if (IncludeVTHeader) {
-    fprintf(out, "#include <vt/transport.h>\n");
+    fmt::print(out, "#include <vt/transport.h>\n");
   }
 
   for (auto&& e : Includes) {
     auto str = std::string("-I") + e;
     ArgumentsAdjuster ad1 = getInsertArgumentAdjuster(str.c_str());
     Tool.appendArgumentsAdjuster(ad1);
-    fprintf(stderr, "Including %s\n", e.c_str());
+    fmt::print(stderr, "Including %s\n", e.c_str());
   }
 
   Tool.run(newFrontendActionFactory<MyFrontendAction>().get());
