@@ -22,6 +22,10 @@ services:
     build:
       context: https://github.com/DARMA-tasking/vt.git#develop
       dockerfile: ci/docker/ubuntu-18.04-clang-cpp.dockerfile
+      args: &default-args
+        arch: ${ARCH}
+        proxy: ${PROXY}
+        compiler: ${COMPILER}
     volumes:
       - shared-file-system:/serialization-sanitizer:delegated
       - vt-src:/vt:delegated
@@ -33,10 +37,7 @@ services:
       context: .
       target: build
       dockerfile: workflows/ubuntu-18.04-clang-cpp.dockerfile
-      args: &default-args
-        arch: ${ARCH}
-        proxy: ${PROXY}
-        compiler: ${COMPILER}
+      args: *default-args
     environment:
       <<: *sanitizeropts
     volumes:
