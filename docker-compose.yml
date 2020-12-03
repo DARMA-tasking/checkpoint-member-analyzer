@@ -23,7 +23,7 @@ services:
       - sanitizer-shared-file-system:/build/vt:delegated
 
   sanitizer-base:
-    image: lifflander1/sanitizer-base-image:latest
+    image: lifflander1/sanitizer-${COMPILER}-base-image:latest
     build:
       context: .
       target: base
