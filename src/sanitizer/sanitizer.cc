@@ -84,6 +84,8 @@ static cl::opt<bool> IncludeVTHeader("Ivt", cl::desc("Include VT headers in gene
 
 DeclarationMatcher RecordMatcher = cxxRecordDecl().bind("recordDecl");
 
+static constexpr char const* sanitizer = "checkpoint::serializers::Sanitizer";
+
 struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
   using MemberListType = std::list<std::tuple<std::string, std::string>>;
   using CXXDeclType = CXXRecordDecl const*;
@@ -239,7 +241,7 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
       auto qual_name = rd->getQualifiedNameAsString();
 
       fmt::print(out,"template <>\n");
-      fmt::print(out,"void {}::serialize<checkpoint::dispatch::Counter>(checkpoint::dispatch::Counter& s) {\n", qual_name);
+      fmt::print(out,"void {}::serialize<{}>({}& s) {\n", qual_name, sanitizer, sanitizer);
       for (auto&& m : members) {
         fmt::print(out,"\ts.check({}, \"{}\");\n", std::get<0>(m), std::get<1>(m));
       }
@@ -262,8 +264,10 @@ struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
 
         fmt::print(out,"template <>\n");
         fmt::print(out,"template <>\n");
-        fmt::print(out,"void {}::serialize<checkpoint::dispatch::Counter>(checkpoint::dispatch::Counter& s) {\n",
-                   qualified_type_outer);
+        fmt::print(
+          out, "void {}::serialize<{}>({}& s) {\n", qualified_type_outer,
+          sanitizer, sanitizer
+        );
         for (auto&& m : members) {
           fmt::print(out,"\ts.check({}, \"{}\");\n", std::get<0>(m), std::get<1>(m));
         }
