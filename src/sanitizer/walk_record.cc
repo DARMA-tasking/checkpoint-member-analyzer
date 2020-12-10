@@ -71,6 +71,17 @@ void WalkRecord::walk(MatchResult const& result) {
       return;
     }
 
+    // If this is a member class of a class template, but not an instantiation
+    // of a member class, we need to skip it
+    for (auto* p = rd->getDeclContext(); p; p = p->getParent()) {
+      if (clang::isa<CXXRecordDecl>(p)) {
+        auto parent = clang::cast<CXXRecordDecl>(p);
+        if (parent->getDescribedClassTemplate()) {
+          return;
+        }
+      }
+    }
+
     // Walk declarations for this struct
     for (auto&& m : rd->decls()) {
       // Skip non-templated functions

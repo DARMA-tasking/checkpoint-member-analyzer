@@ -116,17 +116,18 @@ void PartialSpecializationGenerator::run(
     }
     fmt::print(out_, "{}\n", end);
   } else if (kind == TemplateSpecializationKind::TSK_ImplicitInstantiation) {
-    if (clang::isa<clang::ClassTemplateSpecializationDecl>(rd)) {
-      auto ctsd = clang::cast<clang::ClassTemplateSpecializationDecl>(rd);
-
-      clang::PrintingPolicy policy(ctsd->getASTContext().getPrintingPolicy());
+    if (
+      clang::isa<clang::ClassTemplateSpecializationDecl>(rd) or
+      clang::isa<clang::CXXRecordDecl>(rd)
+    ) {
+      clang::PrintingPolicy policy(rd->getASTContext().getPrintingPolicy());
       policy.SuppressScope = false;
       policy.AnonymousTagLocations = false;
       policy.PolishForDeclaration = true;
       policy.SuppressUnwrittenScope = true;
 
       auto qt = clang::TypeName2::getFullyQualifiedType(
-        clang::QualType(ctsd->getTypeForDecl(),0), ctsd->getASTContext(), false
+        clang::QualType(rd->getTypeForDecl(),0), rd->getASTContext(), false
       );
 
       std::string qualified_type_outer = qt.getAsString(policy);
