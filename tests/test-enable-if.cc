@@ -1,4 +1,6 @@
 
+#include "test-common.h"
+
 #include <type_traits>
 
 struct Footprinter {};
@@ -28,4 +30,6 @@ struct MyTest2 {
   int x = 0;
 };
 
-int main() {}
+int main() {
+  return testClass<MyTest2>("test-enable-if");
+}
