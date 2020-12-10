@@ -20,28 +20,28 @@ struct Directory {
   template <typename SerializerT>
   void serialize(SerializerT& s) {
     s | elm_;
-    elm_.serialize(s);
   }
 
   Element elm_;
+};
+
+struct MyDir {
+  template <typename SerializerT>
+  void serialize(SerializerT& s) {
+    s | i_;
+  }
+
+  int i_;
 };
 
 Directory<int> dir;
 Directory<float> dir2;
 
 int main() {
-  int r1 = testClass<Directory<int>>("test-inner-class<int>");
-  int r2 = testClass<Directory<float>>("test-inner-class<float>");
-  return r1 + r2;
-}
-
-template <>
-template <>
-void Directory<int>::serialize<checkpoint::serializers::Sanitizer>(checkpoint::serializers::Sanitizer& s) {
-  s.check(elm_, "Directory<int>::elm_");
-}
-template <>
-template <>
-void Directory<float>::serialize<checkpoint::serializers::Sanitizer>(checkpoint::serializers::Sanitizer& s) {
-  s.check(elm_, "Directory<float>::elm_");
+  int r1 = testClass<Directory<int>>("test-inner-class Directory<int>");
+  int r2 = testClass<Directory<float>>("test-inner-class Directory<float>");
+  int r3 = testClass<Directory<int>::Element>("test-inner-class Directory<int>::Element");
+  int r4 = testClass<Directory<float>::Element>("test-inner-class Directory<float>::Element");
+  int r5 = testClass<MyDir>("test-inner-class MyDir");
+  return r1 + r2 + r3 + r4 + r5;
 }
