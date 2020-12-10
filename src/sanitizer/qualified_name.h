@@ -45,6 +45,8 @@
 #if !defined INCLUDED_SANITIZER_QUALIFIED_NAME_H
 #define INCLUDED_SANITIZER_QUALIFIED_NAME_H
 
+#include "clang/ASTMatchers/ASTMatchers.h"
+
 namespace clang {
 
 namespace TypeName2 {
