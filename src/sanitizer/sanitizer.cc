@@ -72,7 +72,7 @@ static FILE* out = nullptr;
 static cl::opt<std::string> Filename("o", cl::desc("Filename to output generated code"));
 static cl::list<std::string> Includes("I", cl::desc("Include directories"), cl::ZeroOrMore);
 static cl::opt<bool> GenerateInline("inline", cl::desc("Generate code inline and modify files"));
-static cl::opt<bool> OutputMainFile("main", cl::desc("Output main file with generated code"));
+static cl::opt<bool> OutputMainFile("include-input", cl::desc("Output input file with generated code"));
 static cl::opt<bool> IncludeVTHeader("Ivt", cl::desc("Include VT headers in generated code"));
 
 DeclarationMatcher RecordMatcher = cxxRecordDecl().bind("recordDecl");
