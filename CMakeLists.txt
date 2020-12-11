@@ -92,3 +92,69 @@ install(
   TARGETS sanitizer
   RUNTIME DESTINATION bin
 )
+
+install(
+  FILES scripts/parse-json.pl scripts/transform.sh
+  DESTINATION scripts
+)
+
+###############################################################################
+# Build for sanitizer runtime tests
+###############################################################################
+
+add_subdirectory(tests)
+
+###############################################################################
+# Build for sanitizer runtime that links with checkpoint
+###############################################################################
+
+file(
+  GLOB
+  RT_HEADER_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime/*.h
+)
+
+file(
+  GLOB
+  RT_SOURCE_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime/*.cc
+)
+
+add_library(
+  sanitizer_rt
+  SHARED
+  ${RT_HEADER_FILES} ${RT_SOURCE_FILES}
+)
+
+add_library(vt::lib::sanitizer_rt ALIAS sanitizer_rt)
+
+target_compile_definitions(
+  sanitizer_rt PUBLIC FMT_HEADER_ONLY=1 FMT_USE_USER_DEFINED_LITERALS=0
+)
+target_include_directories(
+  sanitizer_rt PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fmt>
+  $<INSTALL_INTERFACE:include/fmt>
+)
+
+install(
+  TARGETS                   sanitizer_rt
+  EXPORT                    sanitizer_rt
+  LIBRARY DESTINATION       lib
+  ARCHIVE DESTINATION       lib
+  RUNTIME DESTINATION       bin
+  INCLUDES DESTINATION      include
+)
+
+# install(
+#   EXPORT                    sanitizer_rt
+#   DESTINATION               cmake
+#   FILE                      "checkpointTargets.cmake"
+#   NAMESPACE                 vt::lib::
+#   COMPONENT                 runtime
+# )
+
+# install(
+#   TARGETS sanitizer_rt
+#   RUNTIME DESTINATION bin
+# )

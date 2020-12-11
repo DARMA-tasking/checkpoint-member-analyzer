@@ -8,6 +8,8 @@ volumes:
     driver: local
   vt-cache:
     driver: local
+  vt-build:
+    driver: local
 
 # Define rules for sanitizer configuration options across various services
 x-sanitizeropts: &sanitizeropts
@@ -28,8 +30,8 @@ services:
         compiler: ${COMPILER}
     volumes:
       - shared-file-system:/serialization-sanitizer:delegated
-      - vt-src:/vt:delegated
       - vt-cache:/build:delegated
+      - vt-build:/build/vt:delegated
 
   sanitizer-base:
     image: lifflander1/sanitizer-${COMPILER}-base-image:latest
@@ -43,7 +45,7 @@ services:
     volumes:
       - shared-file-system:/build/serialization-sanitizer:delegated
       - .:/serialization-sanitizer:delegated
-      - vt-src:/vt:delegated
+      - vt-build:/vt:delegated
     command:
       /bin/bash -c "
         /serialization-sanitizer/workflows/build_cpp.sh /serialization-sanitizer /build"
