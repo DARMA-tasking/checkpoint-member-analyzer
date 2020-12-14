@@ -7,4 +7,6 @@ commands=$2
 file=$3
 
 t=$(mktemp)
-${sanitizer} -p ${commands} -include-input ${file} > $t
+${sanitizer} -p "${commands}" -include-input "${file}" > "$t"
+cp "${file}" "${file}.bak"
+cp "${t}" "${file}"
