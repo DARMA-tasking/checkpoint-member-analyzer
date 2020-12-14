@@ -95,6 +95,7 @@ install(
 
 install(
   FILES scripts/parse-json.pl scripts/transform.sh
+  PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
   DESTINATION scripts
 )
 

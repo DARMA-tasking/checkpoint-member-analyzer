@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 
 use JSON::PP;
+use File::Basename;
 
 use strict;
 use warnings;
@@ -30,10 +31,13 @@ sub decodeFile {
 
 my $raw = &readFile($json_file);
 my $json = &decodeFile($raw);
+my $dirname = dirname(__FILE__);
 
 map {
     my ($dir, $file) = ($_->{'directory'}, $_->{'file'});
-    my $cmd = "@ARGV $san $json_file $file";
-    print "$cmd\n" if ($dir =~ /$dir_match/ && $file =~ /$file_match/);
-    print `$cmd` if ($run == 1);
+    my $cmd = "$dirname/transform.sh $san $json_file $file @ARGV";
+    if ($dir =~ /$dir_match/ && $file =~ /$file_match/) {
+        print "$cmd\n";
+        print `$cmd` if ($run == 1);
+    }
 } @{$json};
