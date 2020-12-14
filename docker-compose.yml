@@ -48,4 +48,5 @@ services:
       - vt-build:/vt:delegated
     command:
       /bin/bash -c "
-        /serialization-sanitizer/workflows/build_cpp.sh /serialization-sanitizer /build"
+        /serialization-sanitizer/workflows/build_cpp.sh /serialization-sanitizer /build &&
+        /serialization-sanitizer/workflows/test_cpp.sh /serialization-sanitizer /build"
