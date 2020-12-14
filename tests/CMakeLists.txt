@@ -17,6 +17,8 @@ configure_file(
   COPYONLY
 )
 
+set(test_name_list "")
+
 foreach(test_file ${TEST_SOURCE_FILES})
   message(STATUS "Adding test: ${test_file}")
 
@@ -38,6 +40,9 @@ foreach(test_file ${TEST_SOURCE_FILES})
   # needed for the utility to build
   add_executable("${test_name}-skip" "${test_name}.cc")
 
+  add_test(${test_name} ${test_name})
+  list(APPEND test_name_list ${test_name})
+
   install(
     FILES ${test_file}
     DESTINATION tests
@@ -45,3 +50,8 @@ foreach(test_file ${TEST_SOURCE_FILES})
 endforeach()
 
 
+add_custom_target(
+  check
+  COMMAND ${CMAKE_CTEST_COMMAND}
+  DEPENDS ${test_name_list}
+)
