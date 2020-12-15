@@ -153,9 +153,10 @@ void Sanitizer::printSummary() {
     return m1->getInstances() > m2->getInstances();
   });
   FILE* fd = stdout;
+  std::string pid_str = "";
   if (output_as_file) {
-    auto str = fmt::format("{}.sanitize.out", getpid());
-    auto pid = str.c_str();
+    pid_str = fmt::format("{}.sanitize.out", getpid());
+    auto pid = pid_str.c_str();
     auto nfd = fopen(pid, "a");
     if (nfd) {
       fd = nfd;
@@ -164,6 +165,10 @@ void Sanitizer::printSummary() {
       fmt::print(stderr, "Failed to open file {}\n", pid);
     }
   }
+
+  fmt::print(fd, "===========================================\n");
+  fmt::print(fd, "===== Serialization Sanitizer Output ======\n");
+  fmt::print(fd, "===========================================\n");
 
   for (auto&& e : m) {
     auto const& name = e->getName();
@@ -188,6 +193,7 @@ void Sanitizer::printSummary() {
   }
 
   if (fd != stdout) {
+    fmt::print("Sanitizer: wrote output to {}\n", pid_str);
     fclose(fd);
   }
 }
