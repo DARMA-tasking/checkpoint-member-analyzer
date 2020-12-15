@@ -47,6 +47,7 @@
 
 #include <cassert>
 #include <unistd.h>
+#include <cxxabi.h>
 
 namespace checkpoint { namespace sanitizer {
 
@@ -144,6 +145,17 @@ void Sanitizer::checkValidityFrame() {
   }
 }
 
+static std::string demangle(char const* name) {
+  int status = 0;
+
+  std::unique_ptr<char, void(*)(void*)> res {
+    abi::__cxa_demangle(name, NULL, NULL, &status),
+    std::free
+  };
+
+  return status == 0 ? res.get() : name;
+}
+
 void Sanitizer::printSummary() {
   std::vector<MissingInfo*> m;
   for (auto&& e : missing_) {
@@ -154,10 +166,10 @@ void Sanitizer::printSummary() {
   });
   FILE* fd = stdout;
   std::string pid_str = "";
+  auto pid = getpid();
   if (output_as_file) {
-    pid_str = fmt::format("{}.sanitize.out", getpid());
-    auto pid = pid_str.c_str();
-    auto nfd = fopen(pid, "a");
+    pid_str = fmt::format("{}.sanitize.out", pid);
+    auto nfd = fopen(pid_str.c_str(), "a");
     if (nfd) {
       fd = nfd;
     } else {
@@ -166,9 +178,9 @@ void Sanitizer::printSummary() {
     }
   }
 
-  fmt::print(fd, "===========================================\n");
-  fmt::print(fd, "===== Serialization Sanitizer Output ======\n");
-  fmt::print(fd, "===========================================\n");
+  fmt::print(fd, "{}: ===========================================\n", pid);
+  fmt::print(fd, "{}: ===== Serialization Sanitizer Output ======\n", pid);
+  fmt::print(fd, "{}: ===========================================\n", pid);
 
   for (auto&& e : m) {
     auto const& name = e->getName();
@@ -176,20 +188,20 @@ void Sanitizer::printSummary() {
     auto const& stacks = e->getStacks();
     auto const& insts = e->getInstances();
 
-    fmt::print(fd, "---- Missing Serialized Member ----\n");
-    fmt::print(fd, "-----------------------------------\n");
-    fmt::print(fd, "---- {} -- {} instances ----\n", name, insts);
-    fmt::print(fd, "---- type: {} ---- \n", tinfo);
+    fmt::print(fd, "{}: ---- Missing Serialized Member ----\n", pid);
+    fmt::print(fd, "{}: -----------------------------------\n", pid);
+    fmt::print(fd, "{}: ---- {} -- {} instances ----\n", pid, name, insts);
+    fmt::print(fd, "{}: ---- type: {} ---- \n", pid, tinfo);
     for (std::size_t i = 0; i < stacks.size(); i++) {
       auto const& cs = stacks.at(i);
       auto const& stack = cs.getStack();
       auto const& sinsts = cs.getInstances();
-      fmt::print(fd, "---- stack {}, {} instances \n", i, sinsts);
+      fmt::print(fd, "{}: ---- stack {}, {} instances \n", pid, i, sinsts);
       for (std::size_t j = 0; j < stack.size(); j++) {
-        fmt::print(fd, "\t {}\n", stack.at(j));
+        fmt::print(fd, "{}: \t {}\n", pid, demangle(stack.at(j).c_str()));
       }
     };
-    fmt::print(fd, "-----------------------------------\n");
+    fmt::print(fd, "{}: -----------------------------------\n", pid);
   }
 
   if (fd != stdout) {
