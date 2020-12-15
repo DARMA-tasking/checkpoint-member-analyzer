@@ -88,18 +88,14 @@ namespace std {
 template <>
 struct hash<checkpoint::sanitizer::PtrName> {
   std::size_t operator()(checkpoint::sanitizer::PtrName const& p) const {
-    return
-      std::hash<intptr_t>{}(reinterpret_cast<intptr_t>(p.addr)) ^
-      std::hash<std::string>{}(p.name);
+    return std::hash<intptr_t>{}(reinterpret_cast<intptr_t>(p.addr));
   }
 };
 
 template <>
 struct hash<checkpoint::sanitizer::PtrNameType> {
   std::size_t operator()(checkpoint::sanitizer::PtrNameType const& p) const {
-    return
-      std::hash<std::string>{}(p.tinfo) ^
-      std::hash<checkpoint::sanitizer::PtrName>{}(p);
+    return std::hash<checkpoint::sanitizer::PtrName>{}(p);
   }
 };
 

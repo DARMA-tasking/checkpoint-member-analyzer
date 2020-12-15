@@ -42,6 +42,7 @@
 //@HEADER
 */
 
+#include "common.h"
 #include "preload.h"
 #include "sanitize_rt.h"
 
@@ -75,7 +76,7 @@ int MPI_Init(int *argc, char ***argv) {
 }
 
 checkpoint::sanitizer::Runtime* checkpoint_sanitizer_rt() {
-  fmt::print("Intercepted checkpoint_sanitizer_rt\n");
+  debug_sanitizer("Intercepted checkpoint_sanitizer_rt\n");
 
   static std::unique_ptr<checkpoint::sanitizer::Sanitizer> active_rt = nullptr;
 
@@ -86,10 +87,7 @@ checkpoint::sanitizer::Runtime* checkpoint_sanitizer_rt() {
 }
 
 bool checkpoint_sanitizer_enabled() {
-  fmt::print("Intercepted checkpoint_sanitizer_enabled\n");
-
-  //checkpoint::sanitizer::checkpoint_sanitizer_enabled.init();
-
+  debug_sanitizer("Intercepted checkpoint_sanitizer_enabled\n");
   return true;
 }
 

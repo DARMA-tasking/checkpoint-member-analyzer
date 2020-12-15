@@ -45,6 +45,7 @@
 #if !defined INCLUDED_SANITIZER_RUNTIME_SANITIZE_RT_H
 #define INCLUDED_SANITIZER_RUNTIME_SANITIZE_RT_H
 
+#include "common.h"
 #include "runtime_interface.h"
 #include "stack_record.h"
 #include "missing_info.h"
@@ -61,11 +62,11 @@ namespace checkpoint { namespace sanitizer {
 struct Sanitizer : Runtime {
 
   Sanitizer() {
-    fmt::print("Constructing sanitizer runtime\n");
+    debug_sanitizer("Constructing sanitizer runtime\n");
   }
 
   virtual ~Sanitizer() {
-    fmt::print("Destroying sanitizer runtime\n");
+    debug_sanitizer("Destroying sanitizer runtime\n");
     printSummary();
   }
 

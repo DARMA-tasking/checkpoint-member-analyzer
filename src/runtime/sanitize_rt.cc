@@ -42,28 +42,16 @@
 //@HEADER
 */
 
+#include "common.h"
 #include "sanitize_rt.h"
 
 #include <cassert>
 
 namespace checkpoint { namespace sanitizer {
 
-Runtime* rt() {
-  static std::unique_ptr<Sanitizer> san_rt;
-  if (san_rt == nullptr) {
-    san_rt = std::make_unique<Sanitizer>();
-  }
-  return san_rt.get();
-}
-
-bool enabled() {
-  fmt::print("returning enabled true!\n");
-  return true;
-}
-
 void Sanitizer::checkMember(void* addr, std::string name, std::string tinfo) {
   assert(stack_.size() > 0 && "Must have valid live stack");
-  fmt::print(
+  debug_sanitizer(
     "check: {}, name={}, tinfo={}: size={}\n",
     static_cast<void const*>(addr), name, tinfo, stack_.size()
   );
@@ -72,7 +60,7 @@ void Sanitizer::checkMember(void* addr, std::string name, std::string tinfo) {
 
 void Sanitizer::skipMember(void* addr, std::string name, std::string tinfo) {
   assert(stack_.size() > 0 && "Must have valid live stack");
-  fmt::print(
+  debug_sanitizer(
     "skip: {}, name={}, tinfo={}: size={}\n",
     static_cast<void const*>(addr), name, tinfo, stack_.size()
   );
@@ -84,7 +72,7 @@ void Sanitizer::isSerialized(void* addr, std::size_t num, std::string tinfo) {
   if (stack_.size() == 0) {
     return;
   }
-  fmt::print(
+  debug_sanitizer(
     "isSerialized: {}, num={}. tinfo={}: size={}\n",
     static_cast<void const*>(addr), num, tinfo, stack_.size()
   );
@@ -92,12 +80,14 @@ void Sanitizer::isSerialized(void* addr, std::size_t num, std::string tinfo) {
 }
 
 void Sanitizer::push(std::string tinfo) {
-  fmt::print("push: tinfo={}\n", tinfo);
   stack_.push_back(StackRecord{tinfo});
+  debug_sanitizer("push: tinfo={} : level={}\n", tinfo, stack_.size());
 }
 
 void Sanitizer::pop(std::string tinfo) {
-  fmt::print("pop: tinfo={}\n", tinfo);
+  debug_sanitizer("pop: tinfo={} : level={}\n", tinfo, stack_.size());
+
+  assert(stack_.back().getName() == tinfo && "Unmatched pop of stack");
 
   // before we pop check the validity of this stack frame.
   checkValidityFrame();
@@ -106,7 +96,7 @@ void Sanitizer::pop(std::string tinfo) {
 }
 
 void Sanitizer::checkValidityFrame() {
-  fmt::print("checkValidityFrame: size={}\n", stack_.size());
+  debug_sanitizer("checkValidityFrame: size={}\n", stack_.size());
 
   assert(stack_.size() > 0 && "Must have a valid live stack");
   auto& e = stack_.back();
@@ -124,6 +114,11 @@ void Sanitizer::checkValidityFrame() {
 
     auto ser_iter = is_serialized.find(elm);
     if (ser_iter == is_serialized.end()) {
+      debug_sanitizer(
+        "**missing: name={}, tinfo={}, addr={} : level={}\n",
+        elm.name, elm.tinfo, elm.addr, stack_.size()
+      );
+
       // we are missing a element in the serializer
       std::vector<std::string> stack;
       for (auto i = stack_.rbegin(); i != stack_.rend(); i++) {
