@@ -46,8 +46,11 @@
 #include "sanitize_rt.h"
 
 #include <cassert>
+#include <unistd.h>
 
 namespace checkpoint { namespace sanitizer {
+
+bool output_as_file = false;
 
 void Sanitizer::checkMember(void* addr, std::string name, std::string tinfo) {
   assert(stack_.size() > 0 && "Must have valid live stack");
@@ -149,26 +152,43 @@ void Sanitizer::printSummary() {
   std::sort(m.begin(), m.end(), [](MissingInfo* m1, MissingInfo* m2) -> bool {
     return m1->getInstances() > m2->getInstances();
   });
+  FILE* fd = stdout;
+  if (output_as_file) {
+    auto str = fmt::format("{}.sanitize.out", getpid());
+    auto pid = str.c_str();
+    auto nfd = fopen(pid, "a");
+    if (nfd) {
+      fd = nfd;
+    } else {
+      perror("Error opening file: ");
+      fmt::print(stderr, "Failed to open file {}\n", pid);
+    }
+  }
+
   for (auto&& e : m) {
     auto const& name = e->getName();
     auto const& tinfo = e->getTinfo();
     auto const& stacks = e->getStacks();
     auto const& insts = e->getInstances();
 
-    fmt::print("---- Missing Serialized Member ----\n");
-    fmt::print("-----------------------------------\n");
-    fmt::print("---- {} -- {} instances ----\n", name, insts);
-    fmt::print("---- type: {} ---- \n", tinfo);
+    fmt::print(fd, "---- Missing Serialized Member ----\n");
+    fmt::print(fd, "-----------------------------------\n");
+    fmt::print(fd, "---- {} -- {} instances ----\n", name, insts);
+    fmt::print(fd, "---- type: {} ---- \n", tinfo);
     for (std::size_t i = 0; i < stacks.size(); i++) {
       auto const& cs = stacks.at(i);
       auto const& stack = cs.getStack();
       auto const& sinsts = cs.getInstances();
-      fmt::print("---- stack {}, {} instances \n", i, sinsts);
+      fmt::print(fd, "---- stack {}, {} instances \n", i, sinsts);
       for (std::size_t j = 0; j < stack.size(); j++) {
-        fmt::print("\t {}\n", stack.at(j));
+        fmt::print(fd, "\t {}\n", stack.at(j));
       }
     };
-    fmt::print("-----------------------------------\n");
+    fmt::print(fd, "-----------------------------------\n");
+  }
+
+  if (fd != stdout) {
+    fclose(fd);
   }
 }
 

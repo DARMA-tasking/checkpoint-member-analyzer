@@ -98,6 +98,8 @@ private:
   std::unordered_map<std::string, std::unique_ptr<MissingInfo>> missing_;
 };
 
+extern bool output_as_file;
+
 }} /* end namespace checkpoint::sanitizer */
 
 #endif /*INCLUDED_SANITIZER_RUNTIME_SANITIZE_RT_H*/

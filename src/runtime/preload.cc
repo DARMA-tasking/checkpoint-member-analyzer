@@ -46,6 +46,8 @@
 #include "preload.h"
 #include "sanitize_rt.h"
 
+#include <stdlib.h>
+
 namespace checkpoint { namespace sanitizer {
 
 #define SANITIZER_HOOK(name) \
@@ -66,11 +68,47 @@ extern "C" {
 int MPI_Init(int *argc, char ***argv) {
   checkpoint::sanitizer::MPI_Init.init();
 
-  fmt::print("Intercepted MPI_Init\n");
+  debug_sanitizer("Intercepted MPI_Init\n");
+
+#if 0
+  std::vector<std::string> new_args;
+
+  for (int i = 0; i < *argc; i++) {
+    fmt::print("ARG {}: {}\n", i, (*argv)[i]);
+    if (std::string{(*argv)[i]} == std::string("--vt_sanitize_file")) {
+      checkpoint::sanitizer::output_as_file = true;
+    } else {
+      new_args.push_back((*argv)[i]);
+    }
+  }
+#endif
+
+  char* to_file = getenv("VT_SANITIZE_OUTPUT_FILE");
+
+  if (to_file != nullptr) {
+    auto str = std::string{to_file};
+    if (str == "1" or str == "ON" or str == "on" or str == "true" or str == "TRUE") {
+      checkpoint::sanitizer::output_as_file = true;
+    }
+  }
 
   if (checkpoint::sanitizer::MPI_Init) {
+#if 0
+    int num_argc = static_cast<int>(new_args.size());
+    std::vector<char*> new_argv;
+
+    for (auto&& e : new_args) {
+      new_argv.push_back(const_cast<char*>(e.c_str()));
+    }
+
+    char** raw_argv = &new_argv[0];
+
+    return checkpoint::sanitizer::MPI_Init(&num_argc, &raw_argv);
+#endif
+
     return checkpoint::sanitizer::MPI_Init(argc, argv);
   } else {
+    fmt::print(stderr, "Failed for forward symbol\n");
     return 1;
   }
 }
