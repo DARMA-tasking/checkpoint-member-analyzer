@@ -7,7 +7,7 @@ find_program(ccache_binary ccache)
 if (ccache_binary)
   message(
     STATUS
-    "VT: Found ccache binary: ${ccache_binary}; adding launch rule"
+    "Sanitizer: Found ccache binary: ${ccache_binary}; adding launch rule"
   )
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${ccache_binary}")
 endif()
@@ -92,3 +92,73 @@ install(
   TARGETS sanitizer
   RUNTIME DESTINATION bin
 )
+
+install(
+  FILES scripts/parse-json.pl scripts/transform.sh
+  PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+  DESTINATION scripts
+)
+
+###############################################################################
+# Build for sanitizer runtime tests
+###############################################################################
+
+include(CTest)
+enable_testing()
+
+add_subdirectory(tests)
+
+###############################################################################
+# Build for sanitizer runtime that links with checkpoint
+###############################################################################
+
+file(
+  GLOB
+  RT_HEADER_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime/*.h
+)
+
+file(
+  GLOB
+  RT_SOURCE_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime/*.cc
+)
+
+add_library(
+  sanitizer_rt
+  SHARED
+  ${RT_HEADER_FILES} ${RT_SOURCE_FILES}
+)
+
+add_library(vt::lib::sanitizer_rt ALIAS sanitizer_rt)
+
+target_compile_definitions(
+  sanitizer_rt PUBLIC FMT_HEADER_ONLY=1 FMT_USE_USER_DEFINED_LITERALS=0
+)
+target_include_directories(
+  sanitizer_rt PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fmt>
+  $<INSTALL_INTERFACE:include/fmt>
+)
+
+install(
+  TARGETS                   sanitizer_rt
+  EXPORT                    sanitizer_rt
+  LIBRARY DESTINATION       lib
+  ARCHIVE DESTINATION       lib
+  RUNTIME DESTINATION       bin
+  INCLUDES DESTINATION      include
+)
+
+# install(
+#   EXPORT                    sanitizer_rt
+#   DESTINATION               cmake
+#   FILE                      "checkpointTargets.cmake"
+#   NAMESPACE                 vt::lib::
+#   COMPONENT                 runtime
+# )
+
+# install(
+#   TARGETS sanitizer_rt
+#   RUNTIME DESTINATION bin
+# )
