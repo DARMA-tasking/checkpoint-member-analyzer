@@ -95,7 +95,7 @@ int MPI_Init(int *argc, char ***argv) {
   if (to_colorize != nullptr) {
     auto str = std::string{to_colorize};
     if (str == "0" or str == "OFF" or str == "off" or str == "false" or str == "FALSE") {
-      checkpoint::sanitizer::output_colorize = true;
+      checkpoint::sanitizer::output_colorize = false;
     }
   }
 
