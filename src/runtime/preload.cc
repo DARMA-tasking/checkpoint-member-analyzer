@@ -84,11 +84,18 @@ int MPI_Init(int *argc, char ***argv) {
 #endif
 
   char* to_file = getenv("VT_SANITIZE_OUTPUT_FILE");
-
   if (to_file != nullptr) {
     auto str = std::string{to_file};
     if (str == "1" or str == "ON" or str == "on" or str == "true" or str == "TRUE") {
       checkpoint::sanitizer::output_as_file = true;
+    }
+  }
+
+  char* to_colorize = getenv("VT_SANITIZE_OUTPUT_COLORIZE");
+  if (to_colorize != nullptr) {
+    auto str = std::string{to_colorize};
+    if (str == "0" or str == "OFF" or str == "off" or str == "false" or str == "FALSE") {
+      checkpoint::sanitizer::output_colorize = true;
     }
   }
 

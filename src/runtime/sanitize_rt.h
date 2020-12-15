@@ -99,6 +99,7 @@ private:
 };
 
 extern bool output_as_file;
+extern bool output_colorize;
 
 }} /* end namespace checkpoint::sanitizer */
 

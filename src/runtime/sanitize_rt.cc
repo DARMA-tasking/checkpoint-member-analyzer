@@ -52,6 +52,7 @@
 namespace checkpoint { namespace sanitizer {
 
 bool output_as_file = false;
+bool output_colorize = true;
 
 void Sanitizer::checkMember(void* addr, std::string name, std::string tinfo) {
   assert(stack_.size() > 0 && "Must have valid live stack");
@@ -156,6 +157,44 @@ static std::string demangle(char const* name) {
   return status == 0 ? res.get() : name;
 }
 
+inline bool colorizeOutput() {
+  return output_colorize;
+}
+
+inline std::string green()    { return colorizeOutput() ? "\033[32m"   : ""; }
+inline std::string bold()     { return colorizeOutput() ? "\033[1m"    : ""; }
+inline std::string magenta()  { return colorizeOutput() ? "\033[95m"   : ""; }
+inline std::string red()      { return colorizeOutput() ? "\033[31m"   : ""; }
+inline std::string bred()     { return colorizeOutput() ? "\033[31;1m" : ""; }
+inline std::string reset()    { return colorizeOutput() ? "\033[00m"   : ""; }
+inline std::string bd_green() { return colorizeOutput() ? "\033[32;1m" : ""; }
+inline std::string it_green() { return colorizeOutput() ? "\033[32;3m" : ""; }
+inline std::string un_green() { return colorizeOutput() ? "\033[32;4m" : ""; }
+inline std::string byellow()  { return colorizeOutput() ? "\033[33;1m" : ""; }
+inline std::string yellow()   { return colorizeOutput() ? "\033[33m"   : ""; }
+inline std::string blue()     { return colorizeOutput() ? "\033[34m"   : ""; }
+
+inline std::string emph(std::string str) {
+  return magenta() + str + reset();
+}
+inline std::string reg(std::string str) {
+  return green() + str + reset();
+}
+inline std::string vtPre() {
+  return bd_green() + std::string("vt:sanitizer") + reset() + ": ";
+}
+inline std::string proc(pid_t pid)  {
+  return blue() + "" + std::to_string(pid) + ":" + reset();
+}
+
+template <typename... Args>
+static void outputPidLines(
+  FILE* fd, pid_t pid, std::string const& line, Args&&... args
+) {
+  auto s = fmt::format(proc(pid) + vtPre() + line, std::forward<Args>(args)...);
+  fmt::print(fd, s);
+}
+
 void Sanitizer::printSummary() {
   std::vector<MissingInfo*> m;
   for (auto&& e : missing_) {
@@ -178,9 +217,21 @@ void Sanitizer::printSummary() {
     }
   }
 
-  fmt::print(fd, "{}: ===========================================\n", pid);
-  fmt::print(fd, "{}: ===== Serialization Sanitizer Output ======\n", pid);
-  fmt::print(fd, "{}: ===========================================\n", pid);
+  outputPidLines(
+    fd, pid,
+    yellow() +  "===========================================\n" + reset()
+  );
+  outputPidLines(
+    fd, pid,
+    yellow() + "===== " +
+    green() + "Serialization Sanitizer Output" +
+    yellow() + " ======\n" +
+    reset()
+  );
+  outputPidLines(
+    fd, pid,
+    yellow() + "===========================================\n" + reset()
+  );
 
   for (auto&& e : m) {
     auto const& name = e->getName();
@@ -188,20 +239,30 @@ void Sanitizer::printSummary() {
     auto const& stacks = e->getStacks();
     auto const& insts = e->getInstances();
 
-    fmt::print(fd, "{}: ---- Missing Serialized Member ----\n", pid);
-    fmt::print(fd, "{}: -----------------------------------\n", pid);
-    fmt::print(fd, "{}: ---- {} -- {} instances ----\n", pid, name, insts);
-    fmt::print(fd, "{}: ---- type: {} ---- \n", pid, tinfo);
+    outputPidLines(fd, pid, "---- Found missing serialized member ----\n");
+    outputPidLines(fd, pid, "-----------------------------------------\n");
+    outputPidLines(
+      fd, pid, "---- {}{}{} -- {}{} instances{} ----\n",
+      bred(), name, reset(), bold(), insts, reset()
+    );
+    outputPidLines(
+      fd, pid, "---- {}type: {}{} ---- \n", magenta(), tinfo, reset()
+    );
     for (std::size_t i = 0; i < stacks.size(); i++) {
       auto const& cs = stacks.at(i);
       auto const& stack = cs.getStack();
       auto const& sinsts = cs.getInstances();
-      fmt::print(fd, "{}: ---- stack {}, {} instances \n", pid, i, sinsts);
+      outputPidLines(
+        fd, pid, "---- {}stack {}{}, {}{} instances{} \n",
+        bd_green(), i, reset(), bold(), sinsts, reset()
+      );
       for (std::size_t j = 0; j < stack.size(); j++) {
-        fmt::print(fd, "{}: \t {}\n", pid, demangle(stack.at(j).c_str()));
+        outputPidLines(
+          fd, pid, "\t {}{}{}\n", red(), demangle(stack.at(j).c_str()), reset()
+        );
       }
     };
-    fmt::print(fd, "{}: -----------------------------------\n", pid);
+    outputPidLines(fd, pid, "----------------------------------------\n");
   }
 
   if (fd != stdout) {
