@@ -20,7 +20,7 @@ x-sanitizeropts: &sanitizeropts
 services:
 
   vt-base:
-    image: lifflander1/vt:develop
+    image: lifflander1/vt:develop-clang-5.0
     build:
       context: https://github.com/DARMA-tasking/vt.git#develop
       dockerfile: ci/docker/ubuntu-18.04-clang-cpp.dockerfile
