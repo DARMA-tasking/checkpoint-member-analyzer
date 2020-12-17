@@ -59,7 +59,7 @@ docker-compose run sanitizer-base
 - Launch the VT container interactively with the sanitizer built:
 
 ```shell
-docker-compose run vt-base
+docker-compose run vt-base /bin/bash
 ```
 
 ## Running
