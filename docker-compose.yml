@@ -33,6 +33,11 @@ services:
       - vt-cache:/build:delegated
       - vt-build:/build/vt:delegated
 
+  app-base:
+    image: ${APP_IMAGE}
+    volumes:
+      - shared-file-system:/serialization-sanitizer:delegated
+
   sanitizer-base:
     image: lifflander1/sanitizer-${COMPILER}-base-image:latest
     build:
