@@ -1,0 +1,35 @@
+name: PR tests (clang-9, ubuntu)
+
+on:
+  push:
+    branches:
+      - develop
+      - master
+      - 1.*
+  pull_request:
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    env:
+      COMPILER: clang-9
+      BUILD_TYPE: release
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Docker Pull Base Image
+      shell: bash
+      run: docker-compose pull --ignore-pull-failures sanitizer-base
+    - name: Build the Docker image
+      run: docker-compose run sanitizer-base
+    - name: Docker Push Base Image
+      if: success()
+      continue-on-error: true
+      shell: bash
+      run: |
+        docker login -u ${{ secrets.DOCKER_USERNAME }} \
+                     -p ${{ secrets.DOCKER_PASSWORD }}
+        docker-compose push sanitizer-base
