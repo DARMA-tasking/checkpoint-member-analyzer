@@ -35,5 +35,12 @@ else
     exit 3;
 fi
 
-${parse_json} 0 ${sanitizer} ${compile_commands} \.\* 'examples'
-${parse_json} 0 ${sanitizer} ${compile_commands} \.\* 'tests/unit' 'main.cc'
+${parse_json} 1 ${sanitizer} ${compile_commands} \.\* 'examples'
+${parse_json} 1 ${sanitizer} ${compile_commands} \.\* 'tests/unit' 'main.cc'
+
+pushd "${target_build_dir}"
+
+ninja
+ctest -V | tee my-output
+
+popd
