@@ -20,7 +20,7 @@ x-sanitizeropts: &sanitizeropts
 services:
 
   vt-base:
-    image: lifflander1/vt:develop
+    image: lifflander1/vt:develop-clang-5.0
     build:
       context: https://github.com/DARMA-tasking/vt.git#develop
       dockerfile: ci/docker/ubuntu-18.04-clang-cpp.dockerfile
@@ -32,6 +32,13 @@ services:
       - shared-file-system:/serialization-sanitizer:delegated
       - vt-cache:/build:delegated
       - vt-build:/build/vt:delegated
+
+  app-base:
+    image: ${APP_IMAGE}
+    volumes:
+      - shared-file-system:/serialization-sanitizer:delegated
+      - ${CACHE}:/build:delegated
+      - ${VT_CACHE}:/vt:delegated
 
   sanitizer-base:
     image: lifflander1/sanitizer-${COMPILER}-base-image:latest
