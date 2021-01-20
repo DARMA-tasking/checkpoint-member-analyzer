@@ -78,7 +78,11 @@ void InlineGenerator::run(
   #endif
 
   auto body = fn->getBody();
+#if LLVM_VERSION_MAJOR > 7
+  auto start = body->getEndLoc();
+#else
   auto start = body->getLocEnd();
+#endif
   rw_.InsertText(start, "  /* begin generated sanitizer code */\n", true, true);
   for (auto&& m : members) {
     auto str = fmt::format("  s.check({}, \"{}\");\n", m.unqual(), m.qual());
