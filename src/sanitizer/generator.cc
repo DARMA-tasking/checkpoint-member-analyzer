@@ -112,7 +112,7 @@ void PartialSpecializationGenerator::run(
 
     fmt::print(out_, "template <>\n");
     fmt::print(
-      out_, "void {}::serialize<{}>({}& s) {}\n",
+      out_, "inline void {}::serialize<{}>({}& s) {}\n",
       qual_name, sanitizer, sanitizer, begin
     );
     for (auto&& m : members) {
@@ -139,7 +139,7 @@ void PartialSpecializationGenerator::run(
       fmt::print(out_, "template <>\n");
       fmt::print(out_, "template <>\n");
       fmt::print(
-        out_, "void {}::serialize<{}>({}& s) {}\n", qualified_type_outer,
+        out_, "inline void {}::serialize<{}>({}& s) {}\n", qualified_type_outer,
         sanitizer, sanitizer, begin
       );
       for (auto&& m : members) {
