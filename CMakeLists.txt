@@ -130,6 +130,17 @@ add_library(
   ${RT_HEADER_FILES} ${RT_SOURCE_FILES}
 )
 
+add_library(
+  sanitizer-plugin
+  SHARED
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/plugin/plugin.cc
+)
+
+target_include_directories(
+  sanitizer-plugin PUBLIC
+  "${LLVM_INCLUDE_DIRS};${CLANG_INCLUDE_DIRS}"
+)
+
 add_library(vt::lib::sanitizer_rt ALIAS sanitizer_rt)
 
 target_compile_definitions(
