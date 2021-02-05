@@ -49,6 +49,8 @@
 #include "clang/Frontend/FrontendPluginRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <unordered_map>
+
 using namespace clang;
 using namespace ast_matchers;
 
@@ -57,27 +59,30 @@ void SanitizerMatcher::run(const MatchFinder::MatchResult &result) {
   // ASTContext is used to retrieve the source location
   // ASTContext *Ctx = result.Context;
 
-  auto record = result.Nodes.getNodeAs<clang::CXXRecordDecl>("record");
-  auto method = result.Nodes.getNodeAs<clang::FunctionTemplateDecl>("method");
-  auto binary_op = result.Nodes.getNodeAs<clang::BinaryOperator>("binary");
+  auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
+  auto method = result.Nodes.getNodeAs<FunctionTemplateDecl>("method");
+  auto binary_op = result.Nodes.getNodeAs<BinaryOperator>("binary");
 
-  llvm::errs() << "Fields for: " << record->getQualifiedNameAsString() << "\n";
-  for (const auto& field : record->fields()) {
+  llvm::errs() << "\nSerialized fields:\n";
+  std::unordered_map<int64_t, FieldDecl const*> serialized;
+  Expr const* lhs;
+  do {
+    lhs = binary_op->getLHS();
+    auto rhs_member_expr = dyn_cast<MemberExpr>(binary_op->getRHS());
+    auto field = dyn_cast<FieldDecl>(rhs_member_expr->getMemberDecl());
     field->dumpColor();
-  }
+    serialized[field->getID()] = field;
+  } while ((binary_op = dyn_cast<BinaryOperator>(lhs)));
 
-  // if (not method->hasBody()) -> empty serializer requires different matcher
-  // auto body = method->getBody();
-
-  llvm::errs() << "Serialized fields:\n";
-  auto LHS = binary_op->getLHS();
-  auto RHS = binary_op->getRHS();
-  RHS->dumpColor();
-
-  while (const BinaryOperator *next_op = dyn_cast<BinaryOperator>(LHS)) {
-    LHS = next_op->getLHS();
-    RHS = next_op->getRHS();
-    RHS->dumpColor();
+  llvm::errs() << "\nFields in " << record->getQualifiedNameAsString() << ":\n";
+  for (auto field : record->fields()) {
+    field->dumpColor();
+    if (serialized.find(field->getID()) == serialized.end()) {
+      llvm::errs()
+        << "Warning: field "
+        << field->getQualifiedNameAsString()
+        << " is not serialized.\n";
+    }
   }
 }
 
@@ -91,17 +96,18 @@ void SanitizerMatcher::onEndOfTranslationUnit() {
 }
 
 SanitizerASTConsumer::SanitizerASTConsumer(Rewriter &r) : matcher_(r) {
-  auto CallSiteMatcher =
-      cxxRecordDecl(
-        has(functionTemplateDecl(
-          hasName("serialize"),
-          has(cxxMethodDecl(
-            parameterCountIs(1), has(compoundStmt(has(binaryOperator().bind("binary"))))
+  auto serialize_matcher =
+    cxxRecordDecl(
+      has(functionTemplateDecl(
+        hasName("serialize"), has(cxxMethodDecl(
+          parameterCountIs(1), has(compoundStmt(
+            has(binaryOperator().bind("binary")) // TODO: consider empty serialize
           ))
-        ).bind("method"))
-      ).bind("record");
+        ))
+      ).bind("method"))
+    ).bind("record");
 
-  finder_.addMatcher(CallSiteMatcher, &matcher_);
+  finder_.addMatcher(serialize_matcher, &matcher_);
 }
 
 //-----------------------------------------------------------------------------
