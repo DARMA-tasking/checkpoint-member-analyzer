@@ -1,0 +1,30 @@
+name: PR tests (clang-5.0, ubuntu)
+
+on:
+  push:
+    branches:
+      - develop
+      - master
+      - 1.*
+  pull_request:
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    env:
+      COMPILER: clang-5.0
+      BUILD_TYPE: release
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Docker Pull sanitizer-base Image
+      shell: bash
+      run: docker-compose pull --ignore-pull-failures sanitizer-base && docker-compose run sanitizer-base
+    - name: Docker Pull vt-base Image
+      shell: bash
+      run: docker-compose pull --ignore-pull-failures vt-base
+    - name: Run sanitizer
+      run: docker-compose run vt-base
