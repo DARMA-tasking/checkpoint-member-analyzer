@@ -63,7 +63,7 @@ void SanitizerMatcher::run(const MatchFinder::MatchResult &result) {
   auto method = result.Nodes.getNodeAs<FunctionTemplateDecl>("method");
   auto binary_op = result.Nodes.getNodeAs<BinaryOperator>("binary");
 
-  llvm::errs() << "\nProcessing serialized fields [" << record->getQualifiedNameAsString() << "]\n";
+  // llvm::errs() << "\nProcessing serialized fields [" << record->getQualifiedNameAsString() << "]\n";
   std::unordered_set<FieldDecl const*> serialized;
   Expr const* lhs;
   // binary_op->dumpColor();
@@ -78,7 +78,7 @@ void SanitizerMatcher::run(const MatchFinder::MatchResult &result) {
     serialized.insert(field->getFirstDecl());
   } while ((binary_op = dyn_cast<BinaryOperator>(lhs)));
 
-  llvm::errs() << "Processing fields [" << record->getQualifiedNameAsString() << "]\n";
+  // llvm::errs() << "Processing fields [" << record->getQualifiedNameAsString() << "]\n";
   for (auto field : record->fields()) {
     // field->dumpColor();
     if (serialized.find(field->getFirstDecl()) == serialized.end()) {
