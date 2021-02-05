@@ -140,7 +140,7 @@ struct MyFrontendAction : ASTFrontendAction {
       fmt::print(out, "{}", buf.str());
     }
 
-    return llvm::make_unique<MyASTConsumer>(rw_);
+    return std::make_unique<MyASTConsumer>(rw_);
   }
 
 private:
