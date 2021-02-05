@@ -44,7 +44,6 @@
 
 #include "plugin.h"
 
-#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendPluginRegistry.h"
 #include "llvm/Support/raw_ostream.h"
@@ -54,11 +53,18 @@
 using namespace clang;
 using namespace ast_matchers;
 
+namespace plugin {
 
-void SanitizerMatcher::run(const MatchFinder::MatchResult &result) {
-  // ASTContext is used to retrieve the source location
-  // ASTContext *Ctx = result.Context;
+void printWarning(FieldDecl const* field_decl) {
+  llvm::errs() << "Warning: field ";
+  llvm::errs().changeColor(llvm::raw_ostream::YELLOW, true);
+  // consider field_decl->getNameForDiagnostic
+  llvm::errs() << field_decl->getQualifiedNameAsString();
+  llvm::errs().resetColor();
+  llvm::errs() << " is not serialized.\n";
+}
 
+void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
   auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
   auto method = result.Nodes.getNodeAs<FunctionTemplateDecl>("method");
   auto binary_op = result.Nodes.getNodeAs<BinaryOperator>("binary");
@@ -66,7 +72,6 @@ void SanitizerMatcher::run(const MatchFinder::MatchResult &result) {
   // llvm::errs() << "\nProcessing serialized fields [" << record->getQualifiedNameAsString() << "]\n";
   std::unordered_set<FieldDecl const*> serialized;
   Expr const* lhs;
-  // binary_op->dumpColor();
   do {
     lhs = binary_op->getLHS();
     auto rhs_member_expr = dyn_cast<MemberExpr>(binary_op->getRHS());
@@ -74,71 +79,54 @@ void SanitizerMatcher::run(const MatchFinder::MatchResult &result) {
       continue; // possibly CXXDependentScopeMemberExpr
     }
     auto field = dyn_cast<FieldDecl>(rhs_member_expr->getMemberDecl());
-    // field->dumpColor();
     serialized.insert(field->getFirstDecl());
   } while ((binary_op = dyn_cast<BinaryOperator>(lhs)));
 
   // llvm::errs() << "Processing fields [" << record->getQualifiedNameAsString() << "]\n";
   for (auto field : record->fields()) {
-    // field->dumpColor();
     if (serialized.find(field->getFirstDecl()) == serialized.end()) {
-      llvm::errs() << "Warning: field ";
-      llvm::errs().changeColor(llvm::raw_ostream::YELLOW, true);
-      llvm::errs() << field->getQualifiedNameAsString();
-      llvm::errs().resetColor();
-      llvm::errs() << " is not serialized.\n";
+      printWarning(field);
     }
   }
 }
 
-void SanitizerMatcher::onEndOfTranslationUnit() {
-  // Replace in place
-  // rewriter_.overwriteChangedFiles();
-
-  // Output to stdout
-  // rewriter_.getEditBuffer(rewriter_.getSourceMgr().getMainFileID())
-  //     .write(llvm::outs());
-}
-
-SanitizerASTConsumer::SanitizerASTConsumer(Rewriter &r) : matcher_(r) {
+SanitizerASTConsumer::SanitizerASTConsumer() {
   auto serialize_matcher =
     cxxRecordDecl(
       has(functionTemplateDecl(
         hasName("serialize"), has(cxxMethodDecl(
           parameterCountIs(1), has(compoundStmt(
-            has(binaryOperator().bind("binary")) // TODO: consider empty serialize
+            has(binaryOperator().bind("binary"))
+            // TODO: consider empty serialize.
+            // Note: "Adding more than one 'NodeMatch' allows finding different
+            // matches in a single pass over the AST."
           ))
         ))
       ).bind("method"))
     ).bind("record");
 
-  finder_.addMatcher(serialize_matcher, &matcher_);
+  finder_.addMatcher(serialize_matcher, &callback_);
 }
 
-//-----------------------------------------------------------------------------
+
 // FrotendAction
-//-----------------------------------------------------------------------------
 struct SanitizerPluginAction : public PluginASTAction {
 public:
-  bool ParseArgs(const CompilerInstance &,
-                 const std::vector<std::string> &) override {
+  bool ParseArgs(CompilerInstance const&,
+                 std::vector<std::string> const&) override {
     return true;
   }
 
-  // Returns our ASTConsumer per translation unit.
-  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
-                                                 StringRef file) override {
-    rewriter_.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
-    return std::make_unique<SanitizerASTConsumer>(rewriter_);
+  // returns our ASTConsumer per translation unit.
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance&,
+                                                 StringRef) override {
+    return std::make_unique<SanitizerASTConsumer>();
   }
-
-private:
-  Rewriter rewriter_;
 };
 
-//-----------------------------------------------------------------------------
-// Registration
-//-----------------------------------------------------------------------------
+// register the plugin
 static FrontendPluginRegistry::Add<SanitizerPluginAction>
     X(/*Name=*/"sanitizer",
       /*Desc=*/"Serialization Sanitizer");
+
+} /* end namespace plugin */

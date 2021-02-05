@@ -48,33 +48,25 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
-#include "clang/Rewrite/Core/Rewriter.h"
 
-//-----------------------------------------------------------------------------
-// ASTMatcher callback
-//-----------------------------------------------------------------------------
+namespace plugin {
+
 struct SanitizerMatcher : public clang::ast_matchers::MatchFinder::MatchCallback {
-  SanitizerMatcher(clang::Rewriter &rewriter) : rewriter_(rewriter) {}
-
-  void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
-  void onEndOfTranslationUnit() override;
-
-private:
-  clang::Rewriter rewriter_;
+  void run(clang::ast_matchers::MatchFinder::MatchResult const&) override;
 };
 
-//-----------------------------------------------------------------------------
-// ASTConsumer
-//-----------------------------------------------------------------------------
 struct SanitizerASTConsumer : public clang::ASTConsumer {
-  SanitizerASTConsumer(clang::Rewriter &r);
-  void HandleTranslationUnit(clang::ASTContext &ctx) override {
+  SanitizerASTConsumer();
+
+  void HandleTranslationUnit(clang::ASTContext& ctx) override {
     finder_.matchAST(ctx);
   }
 
 private:
   clang::ast_matchers::MatchFinder finder_;
-  SanitizerMatcher matcher_;
+  SanitizerMatcher callback_;
 };
+
+} /* end namespace plugin */
 
 #endif /*INCLUDED_SANITIZER_PLUGIN_PLUGIN_H*/

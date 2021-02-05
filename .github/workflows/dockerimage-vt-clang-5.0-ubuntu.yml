@@ -1,4 +1,4 @@
-name: PR tests (clang-5.0, ubuntu)
+name: PR tests (vt, clang-5.0, ubuntu)
 
 on:
   push:
@@ -20,11 +20,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Docker Pull sanitizer-base Image
+    - name: Docker Run sanitizer-base Image
       shell: bash
-      run: docker-compose pull --ignore-pull-failures sanitizer-base && docker-compose run sanitizer-base
+      run: |
+        docker-compose pull --ignore-pull-failures sanitizer-base &&
+        docker-compose run sanitizer-base
     - name: Docker Pull vt-base Image
       shell: bash
       run: docker-compose pull --ignore-pull-failures vt-base
     - name: Run sanitizer
+      shell: bash
       run: docker-compose run vt-base
