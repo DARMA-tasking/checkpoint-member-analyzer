@@ -78,10 +78,11 @@ void SanitizerMatcher::run(const MatchFinder::MatchResult &result) {
   for (auto field : record->fields()) {
     field->dumpColor();
     if (serialized.find(field->getID()) == serialized.end()) {
-      llvm::errs()
-        << "Warning: field "
-        << field->getQualifiedNameAsString()
-        << " is not serialized.\n";
+      llvm::errs() << "Warning: field ";
+      llvm::errs().changeColor(llvm::raw_ostream::YELLOW, true);
+      llvm::errs() << field->getQualifiedNameAsString();
+      llvm::errs().resetColor();
+      llvm::errs() << " is not serialized.\n";
     }
   }
 }
