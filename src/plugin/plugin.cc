@@ -66,7 +66,7 @@ void printWarning(FieldDecl const* field_decl) {
 
 void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
   auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
-  auto method = result.Nodes.getNodeAs<FunctionTemplateDecl>("method");
+  // auto method = result.Nodes.getNodeAs<FunctionTemplateDecl>("method");
   auto binary_op = result.Nodes.getNodeAs<BinaryOperator>("binary");
 
   // llvm::errs() << "\nProcessing serialized fields [" << record->getQualifiedNameAsString() << "]\n";

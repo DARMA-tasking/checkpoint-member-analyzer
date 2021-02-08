@@ -137,8 +137,13 @@ add_library(
 )
 
 target_include_directories(
-  sanitizer-plugin PUBLIC
+  sanitizer-plugin PRIVATE
   "${LLVM_INCLUDE_DIRS};${CLANG_INCLUDE_DIRS}"
+)
+
+target_compile_options(
+  sanitizer-plugin PRIVATE
+  -Wall -Werror
 )
 
 add_library(vt::lib::sanitizer_rt ALIAS sanitizer_rt)
