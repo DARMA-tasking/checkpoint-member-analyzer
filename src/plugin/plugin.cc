@@ -64,25 +64,32 @@ void printWarning(FieldDecl const* field_decl) {
   llvm::errs() << " is not serialized.\n";
 }
 
+std::unordered_set<FieldDecl const*>getSerializedFields(
+  MatchFinder::MatchResult const& result
+) {
+  std::unordered_set<FieldDecl const*> serialized;
+  auto binary_op = result.Nodes.getNodeAs<BinaryOperator>("binary");
+  if (binary_op != nullptr) {
+    Expr const* lhs;
+    do {
+      lhs = binary_op->getLHS();
+      auto rhs_member_expr = dyn_cast<MemberExpr>(binary_op->getRHS());
+      if (!rhs_member_expr) {
+        continue; // possibly CXXDependentScopeMemberExpr
+      }
+      auto field = dyn_cast<FieldDecl>(rhs_member_expr->getMemberDecl());
+      serialized.insert(field->getFirstDecl());
+    } while ((binary_op = dyn_cast<BinaryOperator>(lhs)));
+  }
+
+  return serialized;
+}
+
 void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
   auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
-  // auto method = result.Nodes.getNodeAs<FunctionTemplateDecl>("method");
-  auto binary_op = result.Nodes.getNodeAs<BinaryOperator>("binary");
+  // llvm::errs() << "Processing " << record->getQualifiedNameAsString() << "\n";
 
-  // llvm::errs() << "\nProcessing serialized fields [" << record->getQualifiedNameAsString() << "]\n";
-  std::unordered_set<FieldDecl const*> serialized;
-  Expr const* lhs;
-  do {
-    lhs = binary_op->getLHS();
-    auto rhs_member_expr = dyn_cast<MemberExpr>(binary_op->getRHS());
-    if (!rhs_member_expr) {
-      continue; // possibly CXXDependentScopeMemberExpr
-    }
-    auto field = dyn_cast<FieldDecl>(rhs_member_expr->getMemberDecl());
-    serialized.insert(field->getFirstDecl());
-  } while ((binary_op = dyn_cast<BinaryOperator>(lhs)));
-
-  // llvm::errs() << "Processing fields [" << record->getQualifiedNameAsString() << "]\n";
+  auto serialized = getSerializedFields(result);
   for (auto field : record->fields()) {
     if (serialized.find(field->getFirstDecl()) == serialized.end()) {
       printWarning(field);
@@ -91,21 +98,28 @@ void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
 }
 
 SanitizerASTConsumer::SanitizerASTConsumer() {
-  auto serialize_matcher =
+  auto binary_op =
     cxxRecordDecl(
       has(functionTemplateDecl(
         hasName("serialize"), has(cxxMethodDecl(
-          parameterCountIs(1), has(compoundStmt(
-            has(binaryOperator().bind("binary"))
-            // TODO: consider empty serialize.
-            // Note: "Adding more than one 'NodeMatch' allows finding different
-            // matches in a single pass over the AST."
-          ))
+          parameterCountIs(1),
+          hasDescendant(binaryOperator().bind("binary"))
         ))
-      ).bind("method"))
+      ))
     ).bind("record");
 
-  finder_.addMatcher(serialize_matcher, &callback_);
+  auto empty_body =
+    cxxRecordDecl(
+      has(functionTemplateDecl(
+        hasName("serialize"), has(cxxMethodDecl(
+          parameterCountIs(1),
+          has(compoundStmt(statementCountIs(0)))
+        ))
+      ))
+    ).bind("record");
+
+  finder_.addMatcher(binary_op, &callback_);
+  finder_.addMatcher(empty_body, &callback_);
 }
 
 
