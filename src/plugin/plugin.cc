@@ -64,26 +64,57 @@ void printWarning(FieldDecl const* field_decl) {
   llvm::errs() << " is not serialized.\n";
 }
 
+FieldDecl const* getSerializedField(
+  Expr const* expression
+) {
+  auto member_expr = dyn_cast<MemberExpr>(expression);
+  if (member_expr) {
+    // int i_; --->  s | i_;
+    return dyn_cast<FieldDecl>(member_expr->getMemberDecl());
+  }
+
+  auto uo = dyn_cast<UnaryOperator>(expression);
+  if (uo and uo->getOpcode() == UnaryOperator::Opcode::UO_Deref) {
+    auto member_expr = dyn_cast<MemberExpr>(uo->getSubExpr());
+    if (member_expr) {
+      // T* elm_; ---> s | *elm_
+      return dyn_cast<FieldDecl>(member_expr->getMemberDecl());
+    }
+    auto cast = dyn_cast<ImplicitCastExpr>(uo->getSubExpr());
+    member_expr = dyn_cast<MemberExpr>(cast->getSubExpr());
+    // int* i_; --->  s | *i_;
+    return dyn_cast<FieldDecl>(member_expr->getMemberDecl());
+  }
+
+  // std::unique_ptr<int> i_; ---> s | *i;
+  auto oc = dyn_cast<CXXOperatorCallExpr>(expression);
+  if (oc) {
+    auto cast = dyn_cast<ImplicitCastExpr>(*(++oc->child_begin()));
+    auto member_expr = dyn_cast<MemberExpr>(cast->getSubExpr());
+    return dyn_cast<FieldDecl>(member_expr->getMemberDecl());
+  }
+
+  return nullptr; // possibly CXXDependentScopeMemberExpr
+}
+
 std::unordered_set<FieldDecl const*>getSerializedFields(
   CXXMethodDecl const* method
 ) {
   std::unordered_set<FieldDecl const*> serialized;
   for (auto child : method->getBody()->children()) {
-    BinaryOperator const* binary_op = dyn_cast<BinaryOperator>(child);
-    if (not binary_op) {
+    BinaryOperator const* bo = dyn_cast<BinaryOperator>(child);
+    if (not bo or bo->getOpcode() != BinaryOperator::Opcode::BO_Or) {
       continue;
     }
 
     Expr const* lhs;
     do {
-      lhs = binary_op->getLHS();
-      auto rhs_member_expr = dyn_cast<MemberExpr>(binary_op->getRHS());
-      if (!rhs_member_expr) {
-        continue; // possibly CXXDependentScopeMemberExpr
+      lhs = bo->getLHS();
+      auto field = getSerializedField(bo->getRHS());
+      if (field) {
+        serialized.insert(field->getFirstDecl());
       }
-      auto field = dyn_cast<FieldDecl>(rhs_member_expr->getMemberDecl());
-      serialized.insert(field->getFirstDecl());
-    } while ((binary_op = dyn_cast<BinaryOperator>(lhs)));
+    } while ((bo = dyn_cast<BinaryOperator>(lhs)));
   }
 
   return serialized;
