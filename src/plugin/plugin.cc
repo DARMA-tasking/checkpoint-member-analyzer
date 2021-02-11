@@ -65,11 +65,15 @@ void printWarning(FieldDecl const* field_decl) {
 }
 
 std::unordered_set<FieldDecl const*>getSerializedFields(
-  MatchFinder::MatchResult const& result
+  CXXMethodDecl const* method
 ) {
   std::unordered_set<FieldDecl const*> serialized;
-  auto binary_op = result.Nodes.getNodeAs<BinaryOperator>("binary");
-  if (binary_op != nullptr) {
+  for (auto child : method->getBody()->children()) {
+    BinaryOperator const* binary_op = dyn_cast<BinaryOperator>(child);
+    if (not binary_op) {
+      continue;
+    }
+
     Expr const* lhs;
     do {
       lhs = binary_op->getLHS();
@@ -88,8 +92,12 @@ std::unordered_set<FieldDecl const*>getSerializedFields(
 void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
   auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
   // llvm::errs() << "Processing " << record->getQualifiedNameAsString() << "\n";
+  auto method = result.Nodes.getNodeAs<CXXMethodDecl>("method");
+  if (not method->hasBody()) {
+    return;
+  }
 
-  auto serialized = getSerializedFields(result);
+  auto serialized = getSerializedFields(method);
   for (auto field : record->fields()) {
     if (serialized.find(field->getFirstDecl()) == serialized.end()) {
       printWarning(field);
@@ -102,24 +110,12 @@ SanitizerASTConsumer::SanitizerASTConsumer() {
     cxxRecordDecl(
       has(functionTemplateDecl(
         hasName("serialize"), has(cxxMethodDecl(
-          parameterCountIs(1),
-          hasDescendant(binaryOperator().bind("binary"))
-        ))
-      ))
-    ).bind("record");
-
-  auto empty_body =
-    cxxRecordDecl(
-      has(functionTemplateDecl(
-        hasName("serialize"), has(cxxMethodDecl(
-          parameterCountIs(1),
-          has(compoundStmt(statementCountIs(0)))
-        ))
+          parameterCountIs(1)
+        ).bind("method"))
       ))
     ).bind("record");
 
   finder_.addMatcher(binary_op, &callback_);
-  finder_.addMatcher(empty_body, &callback_);
 }
 
 
