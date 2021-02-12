@@ -86,11 +86,11 @@ FieldDecl const* getSerializedField(
     return dyn_cast<FieldDecl>(member_expr->getMemberDecl());
   }
 
-  // std::unique_ptr<int> i_; ---> s | *i;
   auto oc = dyn_cast<CXXOperatorCallExpr>(expression);
   if (oc) {
     auto cast = dyn_cast<ImplicitCastExpr>(*(++oc->child_begin()));
     auto member_expr = dyn_cast<MemberExpr>(cast->getSubExpr());
+    // std::unique_ptr<int> i_; ---> s | *i;
     return dyn_cast<FieldDecl>(member_expr->getMemberDecl());
   }
 
@@ -122,7 +122,10 @@ std::unordered_set<FieldDecl const*>getSerializedFields(
 
 void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
   auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
-  // llvm::errs() << "Processing " << record->getQualifiedNameAsString() << "\n";
+  if (record->isUnion()) {
+    return;
+  }
+
   auto method = result.Nodes.getNodeAs<CXXMethodDecl>("method");
   if (not method->hasBody()) {
     return;
