@@ -64,9 +64,7 @@ void printWarning(FieldDecl const* field_decl) {
   llvm::errs() << " is not serialized.\n";
 }
 
-FieldDecl const* getSerializedField(
-  Expr const* expression
-) {
+FieldDecl const* getSerializedField(Expr const* expression) {
   auto member_expr = dyn_cast<MemberExpr>(expression);
   if (member_expr) {
     // int i_; --->  s | i_;
@@ -98,10 +96,10 @@ FieldDecl const* getSerializedField(
 }
 
 std::unordered_set<FieldDecl const*>getSerializedFields(
-  CXXMethodDecl const* method
+  FunctionDecl const* function
 ) {
   std::unordered_set<FieldDecl const*> serialized;
-  for (auto child : method->getBody()->children()) {
+  for (auto child : function->getBody()->children()) {
     BinaryOperator const* bo = dyn_cast<BinaryOperator>(child);
     if (not bo or bo->getOpcode() != BinaryOperator::Opcode::BO_Or) {
       continue;
@@ -120,18 +118,47 @@ std::unordered_set<FieldDecl const*>getSerializedFields(
   return serialized;
 }
 
-void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
+CXXRecordDecl const * getRecord(MatchFinder::MatchResult const& result) {
   auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
-  if (record->isUnion()) {
+  if (record) {
+    return record;
+  }
+
+  // FIXME: enabling non-intrusive part shows results for std types
+  bool support_non_intrusive_serializers = false;
+  if (not support_non_intrusive_serializers) {
+    return nullptr;
+  }
+
+  auto param = result.Nodes.getNodeAs<ParmVarDecl>("parameter");
+  param->getType()->dump();
+  record = param->getType()->getPointeeCXXRecordDecl();
+  if (record) {
+    // void serialize(SerializerT& s, Foo& obj) { ... }
+    return record;
+  }
+
+  record = param->getType()->getAsCXXRecordDecl();
+  if (record) {
+    // void serialize(SerializerT& s, Foo obj) { ... }
+    return record;
+  }
+
+  return nullptr;
+}
+
+void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
+  auto function = result.Nodes.getNodeAs<FunctionDecl>("function");
+  if (not function->hasBody()) {
+    return;
+  }
+  auto serialized = getSerializedFields(function);
+
+  auto record = getRecord(result);
+  if (not record or record->isUnion()) {
     return;
   }
 
-  auto method = result.Nodes.getNodeAs<CXXMethodDecl>("method");
-  if (not method->hasBody()) {
-    return;
-  }
-
-  auto serialized = getSerializedFields(method);
   for (auto field : record->fields()) {
     if (serialized.find(field->getFirstDecl()) == serialized.end()) {
       printWarning(field);
@@ -140,16 +167,24 @@ void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
 }
 
 SanitizerASTConsumer::SanitizerASTConsumer() {
-  auto binary_op =
+  auto intrusive =
     cxxRecordDecl(
       has(functionTemplateDecl(
         hasName("serialize"), has(cxxMethodDecl(
           parameterCountIs(1)
-        ).bind("method"))
+        ).bind("function"))
       ))
     ).bind("record");
 
-  finder_.addMatcher(binary_op, &callback_);
+  auto non_intrusive =
+    functionTemplateDecl(
+      hasName("serialize"), has(functionDecl(
+        parameterCountIs(2), hasParameter(1, decl().bind("parameter"))
+      ).bind("function"))
+    );
+
+  finder_.addMatcher(intrusive, &callback_);
+  finder_.addMatcher(non_intrusive, &callback_);
 }
 
 
