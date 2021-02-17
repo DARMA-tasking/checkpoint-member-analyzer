@@ -41,8 +41,10 @@ file(
   SOURCE_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/src/sanitizer/*.cc
 )
-add_executable(
+
+add_library(
   sanitizer
+  SHARED
   ${HEADER_FILES} ${SOURCE_FILES}
 )
 
@@ -56,7 +58,6 @@ target_include_directories(
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fmt>
   $<INSTALL_INTERFACE:include/fmt>
 )
-
 
 # target_include_directories(
 #   ${SERIALIZATION_SANITIZER_LIBRARY} PUBLIC
@@ -84,13 +85,9 @@ target_link_libraries(
   sanitizer PUBLIC ${CLANG_LIBS}
 )
 
-target_link_libraries(
-  sanitizer PUBLIC clangASTMatchers clangToolingCore clangLex clangParse clangSema
-)
-
 install(
   TARGETS sanitizer
-  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION bin
 )
 
 install(

@@ -24,21 +24,21 @@ foreach(test_file ${TEST_SOURCE_FILES})
 
   get_filename_component(test_name ${test_file} NAME_WE)
 
+  # FIXME: this is obviously not the right way (just checking CI)
   add_custom_command(
     OUTPUT "${test_name}.generated.cc"
-    COMMAND ${PROJECT_BINARY_DIR}/sanitizer
-    ARGS "-p" "${PROJECT_BINARY_DIR}/compile_commands.json"
-         "-include-input"
-         ">" "${test_name}.generated.cc"
-         ${test_file}
+    COMMAND cp
+    ARGS ${test_file}
+         "${test_name}.generated.cc"
+    COMMAND clang++
+    ARGS "-std=c++14"
+         "-Xclang" "-load" "-Xclang" "${PROJECT_BINARY_DIR}/libsanitizer.so"
+         "-Xclang" "-plugin" "-Xclang" "sanitizer" "-c" ${test_file}
+         ">>" "${test_name}.generated.cc"
     DEPENDS sanitizer
   )
 
   add_executable(${test_name} ${TEST_HEADER_FILES} "${test_name}.generated.cc")
-
-  # add executable not intended to run but to generate the compile command
-  # needed for the utility to build
-  add_executable("${test_name}-skip" "${test_name}.cc")
 
   add_test(${test_name} ${test_name})
   list(APPEND test_name_list ${test_name})
