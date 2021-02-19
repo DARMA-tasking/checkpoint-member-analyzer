@@ -24,17 +24,18 @@ foreach(test_file ${TEST_SOURCE_FILES})
 
   get_filename_component(test_name ${test_file} NAME_WE)
 
-  # FIXME: this is obviously not the right way (just checking CI)
+  # FIXME: it would be better to add clang flags (per target?), but we have to
+  # make sure that the plugin is built first
+  # note: add_dependencies(${test_name} sanitizer) doesn't seem to work
   add_custom_command(
     OUTPUT "${test_name}.generated.cc"
-    COMMAND cp
-    ARGS ${test_file}
-         "${test_name}.generated.cc"
     COMMAND clang++
-    ARGS "-std=c++14"
+    ARGS "-std=c++14" "-c" ${test_file}
          "-Xclang" "-load" "-Xclang" "${PROJECT_BINARY_DIR}/libsanitizer.so"
-         "-Xclang" "-plugin" "-Xclang" "sanitizer" "-c" ${test_file}
-         ">>" "${test_name}.generated.cc"
+         "-Xclang" "-plugin" "-Xclang" "sanitizer"
+         "-Xclang" "-plugin-arg-sanitizer" "-Xclang" "-include-input"
+         "-Xclang" "-plugin-arg-sanitizer" "-Xclang" "-o"
+         "-Xclang" "-plugin-arg-sanitizer" "-Xclang" "${test_name}.generated.cc"
     DEPENDS sanitizer
   )
 

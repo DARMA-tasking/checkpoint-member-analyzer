@@ -61,7 +61,11 @@ struct Sanitizer {
   }
 };
 
-struct Serializer { };
+struct Serializer {
+  // necessary for InlineGenerator
+  // template <typename Arg, typename... Args>
+  // void check(Arg& m, Args&&...) { }
+};
 
 template <typename SerializerT, typename T>
 void operator|(SerializerT& s, T& t) {
