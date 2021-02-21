@@ -89,7 +89,15 @@ private:
 
 struct SanitizerASTConsumer : ASTConsumer {
   SanitizerASTConsumer(Rewriter& in_rw) : record_handler(in_rw) {
-    auto record_matcher = cxxRecordDecl().bind("recordDecl");
+    // matches intrusive pattern
+    auto record_matcher =
+      cxxRecordDecl(
+        has(functionTemplateDecl(
+          hasName("serialize"), has(cxxMethodDecl(
+            parameterCountIs(1)
+          ).bind("serializeDecl"))
+        ))
+      ).bind("recordDecl");
 
     matcher_.addMatcher(record_matcher, &record_handler);
   }
@@ -119,12 +127,15 @@ bool SanitizerPluginAction::ParseArgs(
     out = fopen((++filename_opt)->c_str(), "w");
   }
 
-  // "inline", Generate code inline and modify files"
+  // generate code inline and modify files
+  if (std::find(args.begin(), args.end(), "-inline") != args.end()) {
+    GenerateInline = true;
+  }
 
-  // "Ivt", Include VT headers in generated code
-  // if (IncludeVTHeader) {
-  //   fmt::print(out, "#include <vt/transport.h>\n");
-  // }
+  // include VT headers in generated code
+  if (std::find(args.begin(), args.end(), "-Ivt") != args.end()) {
+    fmt::print(out, "#include <vt/transport.h>\n");
+  }
 
   return true;
 }

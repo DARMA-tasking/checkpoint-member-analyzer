@@ -66,12 +66,11 @@ struct WalkRecord {
 
   void walk(MatchResult const& result);
 
-  void findExistingChecks(clang::FunctionDecl* fn);
+  void findExistingChecks(clang::FunctionDecl const* fn);
 
   void gatherMembers(clang::CXXRecordDecl const* rd);
 
 protected:
-  bool found_serialize_ = false;
   MemberListType members_;
   std::unordered_set<std::string> existing_checks_;
 

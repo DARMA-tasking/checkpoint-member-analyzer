@@ -2,11 +2,11 @@
 //@HEADER
 // *****************************************************************************
 //
-//                                 generator.h
+//                               sanitizer.h
 //                           DARMA Toolkit v. 1.0.0
 //                       DARMA/Serialization Sanitizer
 //
-// Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC
+// Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC
 // (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
@@ -42,94 +42,37 @@
 //@HEADER
 */
 
-#if !defined INCLUDED_SANITIZER_GENERATOR_H
-#define INCLUDED_SANITIZER_GENERATOR_H
+#if !defined INCLUDED_SANITIZER_SANITIZER_H
+#define INCLUDED_SANITIZER_SANITIZER_H
 
-#include "member_list.h"
-
-#include "clang/AST/ExprCXX.h"
+#include "clang/Frontend/FrontendAction.h"
 #include "clang/Rewrite/Core/Rewriter.h"
 
 namespace sanitizer {
 
 /**
- * \struct Generator
+ * \struct SanitizerPluginAction
  *
- * \brief Abstract code generator for sanitizer
+ * \brief Generates sanitizer code for serializers
  */
-struct Generator {
-
-  virtual ~Generator() = default;
-
-  /**
-   * \brief Run the generator on a specific class with the fields
-   *
-   * \param[in] rd the class
-   * \param[in] fn the serialize method
-   * \param[in] members the list of fields in the class
-   */
-  virtual void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
-    MemberListType members
-  ) = 0;
-
-};
-
-/**
- * \struct InlineGenerator
- *
- * \brief Generates checks in the serialize method directly. Requires
- * modification of source files.
- */
-struct InlineGenerator : Generator {
-
-  explicit InlineGenerator(clang::Rewriter& in_rw)
-    : rw_(in_rw)
-  { }
-
-  void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
-    MemberListType members
+struct SanitizerPluginAction : public clang::PluginASTAction {
+public:
+  bool ParseArgs(
+    clang::CompilerInstance const&,
+    std::vector<std::string> const& args
   ) override;
+
+  std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
+    clang::CompilerInstance &ci,
+    llvm::StringRef file
+  ) override;
+
+  void EndSourceFileAction() override;
 
 private:
-  clang::Rewriter& rw_;
-};
-
-/**
- * \struct PartialSpecializationGenerator
- *
- * \brief Generates checks in a partial specialization of the serialize method.
- */
-struct PartialSpecializationGenerator : Generator {
-
-  explicit PartialSpecializationGenerator(FILE* in_out)
-    : out_(in_out)
-  { }
-
-  void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
-    MemberListType members
-  ) override;
-
-private:
-  FILE* out_ = nullptr;
-};
-
-/**
- * \struct SeperateGenerator
- *
- * \brief Generates checks as a completely separate method (experimental).
- */
-struct SeperateGenerator : Generator {
-
-  void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
-    MemberListType members
-  ) override;
-
+  clang::Rewriter rw_;
 };
 
 } /* end namespace sanitizer */
 
-#endif /*INCLUDED_SANITIZER_GENERATOR_H*/
+#endif /*INCLUDED_SANITIZER_SANITIZER_H*/

@@ -54,89 +54,75 @@ void WalkRecord::walk(MatchResult const& result) {
   using clang::isa;
   using clang::cast;
   using clang::CXXRecordDecl;
-  using clang::TemplateTypeParmDecl;
 
   auto const *rd = result.Nodes.getNodeAs<CXXRecordDecl>("recordDecl");
-  if (rd) {
-    #if SANITIZER_DEBUG
-      fmt::print("Traversing class {}\n", rd->getQualifiedNameAsString());
-    #endif
+  if (not rd) {
+    return;
+  }
 
-    bool temp_instantiation = rd->getTemplateInstantiationPattern() != nullptr;
-    if (gen_inline_ && temp_instantiation) {
-      // skip template instantiation when generating inline
-      return;
-    } else if (rd->getDescribedClassTemplate()) {
-      // skip template classes when generating out-of-line
-      return;
+  #if SANITIZER_DEBUG
+    fmt::print("Traversing class {}\n", rd->getQualifiedNameAsString());
+  #endif
+
+  bool temp_instantiation = rd->getTemplateInstantiationPattern() != nullptr;
+  if (gen_inline_ && temp_instantiation) {
+    // skip template instantiation when generating inline
+    return;
+  } else if (rd->getDescribedClassTemplate()) {
+    // skip template classes when generating out-of-line
+    return;
+  }
+
+  // If this is a member class of a class template, but not an instantiation
+  // of a member class, we need to skip it
+  for (auto* p = rd->getDeclContext(); p; p = p->getParent()) {
+    if (clang::isa<CXXRecordDecl>(p)) {
+      auto parent = clang::cast<CXXRecordDecl>(p);
+      if (parent->getDescribedClassTemplate()) {
+        return;
+      }
     }
+  }
 
-    // If this is a member class of a class template, but not an instantiation
-    // of a member class, we need to skip it
-    for (auto* p = rd->getDeclContext(); p; p = p->getParent()) {
-      if (clang::isa<CXXRecordDecl>(p)) {
-        auto parent = clang::cast<CXXRecordDecl>(p);
-        if (parent->getDescribedClassTemplate()) {
-          return;
+  auto fn = result.Nodes.getNodeAs<clang::CXXMethodDecl>("serializeDecl");
+  if (not fn) {
+    return;
+  }
+
+  // Examine the template parameters to the serialize function
+  auto tp = fn->getDescribedFunctionTemplate()->getTemplateParameters();
+
+  // If we are more than one, we might have a enable_if (Footprinting?)
+  if (tp->size() != 1) {
+    #if SANITIZER_DEBUG
+      for (unsigned int i = 0; i < tp->size(); i++) {
+        auto elm = tp->getParam(i);
+        if (isa<clang::TemplateTypeParmDecl>(elm)) {
+          auto ttpd = cast<clang::TemplateTypeParmDecl>(elm);
+          if (ttpd->hasDefaultArgument()) {
+            fmt::print("Template parameter with default argument\n");
+            ttpd->getDefaultArgument()->dump();
+          } else {
+            fmt::print("Template parameter without default argument\n");
+            ttpd->dumpColor();
+          }
         }
       }
-    }
+    #endif
 
-    // Walk declarations for this struct
-    for (auto&& m : rd->decls()) {
-      // Skip non-templated functions
-      if (not m->isTemplateDecl()) {
-        continue;
-      }
+    return;
+  }
 
-      // Skip functions not called serialize that have exactly one parameter
-      // Matches intrusive pattern
-      auto fn = m->getAsFunction();
-      if (!fn || fn->getNameAsString() != "serialize" || fn->param_size() != 1) {
-        continue;
-      }
+  // After all these checks, we have a valid serialize!
+  // Look for any existing checks in the body
+  findExistingChecks(fn);
 
-      // Examine the template parameters to the serialize function
-      auto ft = fn->getDescribedFunctionTemplate();
-      auto tp = ft->getTemplateParameters();
+  // Gather the member fields in the class
+  gatherMembers(rd);
 
-      // If we are more than one, we might have a enable_if (Footprinting?)
-      if (tp->size() != 1) {
-        #if SANITIZER_DEBUG
-          for (unsigned int i = 0; i < tp->size(); i++) {
-            auto elm = tp->getParam(i);
-            if (isa<TemplateTypeParmDecl>(elm)) {
-              auto ttpd = cast<TemplateTypeParmDecl>(elm);
-              if (ttpd->hasDefaultArgument()) {
-                fmt::print("Template parameter with default argument\n");
-                ttpd->getDefaultArgument()->dump();
-              } else {
-                fmt::print("Template parameter without default argument\n");
-                ttpd->dumpColor();
-              }
-            }
-          }
-        #endif
-
-        continue;
-      }
-
-      // After all these checks, we have a valid serialize!
-      found_serialize_ = true;
-
-      // Look for any existing checks in the body
-      findExistingChecks(fn);
-
-      // Gather the member fields in the class
-      gatherMembers(rd);
-
-      // Invoke the code generator
-      if (gen_ != nullptr) {
-        gen_->run(rd, fn, members_);
-      }
-
-      break;
-    }
+  // Invoke the code generator
+  if (gen_ != nullptr) {
+    gen_->run(rd, fn, members_);
   }
 }
 
@@ -158,7 +144,7 @@ void WalkRecord::gatherMembers(clang::CXXRecordDecl const* rd) {
   }
 }
 
-void WalkRecord::findExistingChecks(clang::FunctionDecl* fn) {
+void WalkRecord::findExistingChecks(clang::FunctionDecl const* fn) {
   using clang::isa;
   using clang::cast;
   using clang::CallExpr;
