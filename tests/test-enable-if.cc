@@ -24,10 +24,12 @@ struct MyTest2 {
 
   template <typename SerializerT>
   void serialize(SerializerT& s) {
-    s | x;
+    s | x
+      | y;
   }
 
   int x = 0;
+  float y;
 };
 
 int main() {

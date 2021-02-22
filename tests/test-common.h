@@ -56,20 +56,23 @@ std::vector<void*> checked;
 
 struct Sanitizer {
   template <typename Arg, typename... Args>
-  void check(Arg& m, Args&&...) {
+  Sanitizer& check(Arg& m, Args&&...) {
     checked.push_back(reinterpret_cast<void*>(&m));
+    return *this;
   }
 };
 
 struct Serializer {
-  // necessary for InlineGenerator
-  // template <typename Arg, typename... Args>
-  // void check(Arg& m, Args&&...) { }
+  template <typename Arg, typename... Args>
+  Serializer& check(Arg& m, Args&&...) {
+    return *this;
+  }
 };
 
 template <typename SerializerT, typename T>
-void operator|(SerializerT& s, T& t) {
+SerializerT& operator|(SerializerT& s, T& t) {
   addr.push_back(reinterpret_cast<void*>(&t));
+  return s;
 }
 
 }} /* end namespace checkpoint::serializers */
