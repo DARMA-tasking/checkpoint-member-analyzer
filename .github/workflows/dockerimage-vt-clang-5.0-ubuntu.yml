@@ -1,4 +1,4 @@
-name: PR tests (vt, clang-5.0, ubuntu)
+name: Sanitizer run (vt, clang-5.0, ubuntu)
 
 on:
   push:
@@ -31,9 +31,7 @@ jobs:
     - name: Run sanitizer
       shell: bash
       run: |
-        docker-compose run vt-base | tee run.log &&
-        echo "Unique fields detected as not serialized:" &&
-        grep "is not serialized" run.log | sort -u | tee sanitizer.log
+        docker-compose run vt-base | tee sanitizer.log
     - name: Archive sanitizer log
       uses: actions/upload-artifact@v2
       with:

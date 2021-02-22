@@ -37,7 +37,7 @@ services:
         pushd /vt &&
         sed -i '/# Primary VT build/i add_definitions( \
           \"-Xclang -load \
-          -Xclang /serialization-sanitizer/libsanitizer-plugin.so \
+          -Xclang /serialization-sanitizer/libsanitizer.so \
           -Xclang -add-plugin -Xclang sanitizer\" \
           )' CMakeLists.txt &&
         /vt/ci/build_cpp.sh /vt /build"
