@@ -32,7 +32,7 @@ foreach(test_file ${TEST_SOURCE_FILES})
     COMMAND clang++
     ARGS "-std=c++14" "-c" ${test_file}
          "-Xclang" "-load" "-Xclang" "${PROJECT_BINARY_DIR}/libsanitizer.so"
-         "-Xclang" "-plugin" "-Xclang" "sanitizer"
+         "-Xclang" "-add-plugin" "-Xclang" "sanitizer"
          "-Xclang" "-plugin-arg-sanitizer" "-Xclang" "-include-input"
          "-Xclang" "-plugin-arg-sanitizer" "-Xclang" "-o"
          "-Xclang" "-plugin-arg-sanitizer" "-Xclang" "${test_name}.generated.cc"

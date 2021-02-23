@@ -62,6 +62,10 @@ public:
     std::vector<std::string> const& args
   ) override;
 
+  PluginASTAction::ActionType getActionType() override {
+    return AddBeforeMainAction;
+  }
+
   std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
     clang::CompilerInstance &ci,
     llvm::StringRef file
