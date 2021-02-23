@@ -51,6 +51,13 @@
 
 namespace plugin {
 
+/**
+ * \struct SanitizerMatcher
+ *
+ * \brief Checks if all fields are serialized in a matched `serialize` function.
+ *
+ * \note This is a compile time, static check.
+ */
 struct SanitizerMatcher : public clang::ast_matchers::MatchFinder::MatchCallback {
   void run(clang::ast_matchers::MatchFinder::MatchResult const&) override;
 };

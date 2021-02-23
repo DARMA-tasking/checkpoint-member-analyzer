@@ -43,13 +43,6 @@ docker-compose build vt-base
 docker-compose pull sanitizer-base
 ```
 
-- Bring images up on `docker-compose` (will build base sanitizer image if
-  needed):
-
-```shell
-docker-compose up
-```
-
 - Compile and build the latest sanitizer code:
 
 ```shell
@@ -64,22 +57,25 @@ docker-compose run vt-base /bin/bash
 
 ## Running
 
-Once the `sanitizer` binary is built, it can be run on a C++ file with a JSON
-compilation database so it knows how to compile the C++ file (includes, flags,
-etc).
+Once the `sanitizer` plugin is built, it can be run on C++ files by just
+appending the sanitizer options to a regular build command (keeping all
+includes, flags, etc).
 
 ```shell
-# /serialization-sanitizer/sanitizer /build/vt/compile-comands.json /vt/examples/hello_world.cc
+clang++ -std=gnu++14 -c tests/test-inner-class.cc \
+    -Xclang -load -Xclang /build/serialization-sanitizer/libsanitizer.so \
+    -Xclang -plugin -Xclang sanitizer
 ```
 
-A compilation database can be generated for a cmake project by defining a cmake
-variable for that project. Set `-DCMAKE_EXPORT_COMPILE_COMMANDS=1` while
-configuring the project that is going to be sanitized. When that variable is
-set, the JSON compilation database will be generated in the cmake build
-directory with the file name `compile_commands.json`.
+This would normally be added to a target in `CMakeLists.txt`.
 
-### Command template
-```shell
-./sanitizer -p <json-compilation-database> <cc-file> -extra-arg=-std=c++1y
+### Plugin options
 
-```
+These can be added with: `-Xclang -plugin-arg-sanitizer -Xclang -option`.
+
+| Flag           | Description                           |
+| -------------- | ------------------------------------- |
+| -include-input | output input file with generated code |
+| -o             | filename to output generated code     |
+| -inline        | generate code inline and modify files |
+| -Ivt           | include VT headers in generated code  |
