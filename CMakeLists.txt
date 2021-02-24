@@ -41,8 +41,10 @@ file(
   SOURCE_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/src/sanitizer/*.cc
 )
-add_executable(
+
+add_library(
   sanitizer
+  SHARED
   ${HEADER_FILES} ${SOURCE_FILES}
 )
 
@@ -56,7 +58,6 @@ target_include_directories(
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fmt>
   $<INSTALL_INTERFACE:include/fmt>
 )
-
 
 # target_include_directories(
 #   ${SERIALIZATION_SANITIZER_LIBRARY} PUBLIC
@@ -84,13 +85,9 @@ target_link_libraries(
   sanitizer PUBLIC ${CLANG_LIBS}
 )
 
-target_link_libraries(
-  sanitizer PUBLIC clangASTMatchers clangToolingCore clangLex clangParse clangSema
-)
-
 install(
   TARGETS sanitizer
-  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION bin
 )
 
 install(
@@ -128,6 +125,22 @@ add_library(
   sanitizer_rt
   SHARED
   ${RT_HEADER_FILES} ${RT_SOURCE_FILES}
+)
+
+add_library(
+  sanitizer-plugin
+  SHARED
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/plugin/plugin.cc
+)
+
+target_include_directories(
+  sanitizer-plugin PRIVATE
+  "${LLVM_INCLUDE_DIRS};${CLANG_INCLUDE_DIRS}"
+)
+
+target_compile_options(
+  sanitizer-plugin PRIVATE
+  -Wall -Werror
 )
 
 add_library(vt::lib::sanitizer_rt ALIAS sanitizer_rt)

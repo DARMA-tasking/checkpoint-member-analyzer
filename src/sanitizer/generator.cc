@@ -55,11 +55,11 @@
 namespace sanitizer {
 
 void InlineGenerator::run(
-  clang::CXXRecordDecl const* rd, clang::FunctionDecl* fn,
+  clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
   MemberListType members
 ) {
   // No members to generate
-  if (members.size() == 0) {
+  if (members.empty()) {
     return;
   }
 
@@ -96,7 +96,7 @@ static constexpr char const* begin = "{";
 static constexpr char const* end = "}";
 
 void PartialSpecializationGenerator::run(
-  clang::CXXRecordDecl const* rd, clang::FunctionDecl* fn,
+  clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
   MemberListType members
 ) {
   #if SANITIZER_DEBUG
@@ -151,7 +151,7 @@ void PartialSpecializationGenerator::run(
 }
 
 void SeperateGenerator::run(
-  clang::CXXRecordDecl const* rd, clang::FunctionDecl* fn,
+  clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
   MemberListType members
 ) {
   std::list<std::string> templates_decl;

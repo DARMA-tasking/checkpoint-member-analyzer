@@ -2,11 +2,11 @@
 //@HEADER
 // *****************************************************************************
 //
-//                                test-common.h
+//                               sanitizer.h
 //                           DARMA Toolkit v. 1.0.0
 //                       DARMA/Serialization Sanitizer
 //
-// Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC
+// Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC
 // (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
@@ -42,85 +42,41 @@
 //@HEADER
 */
 
-#if !defined INCLUDED_SANITIZER_TEST_COMMON_H
-#define INCLUDED_SANITIZER_TEST_COMMON_H
+#if !defined INCLUDED_SANITIZER_SANITIZER_H
+#define INCLUDED_SANITIZER_SANITIZER_H
 
-#include <vector>
-#include <string>
-#include <memory>
+#include "clang/Frontend/FrontendAction.h"
+#include "clang/Rewrite/Core/Rewriter.h"
 
-namespace checkpoint { namespace serializers {
+namespace sanitizer {
 
-std::vector<void*> addr;
-std::vector<void*> checked;
+/**
+ * \struct SanitizerPluginAction
+ *
+ * \brief Generates sanitizer code for serializers
+ */
+struct SanitizerPluginAction : public clang::PluginASTAction {
+public:
+  bool ParseArgs(
+    clang::CompilerInstance const&,
+    std::vector<std::string> const& args
+  ) override;
 
-struct Sanitizer {
-  template <typename Arg, typename... Args>
-  Sanitizer& check(Arg& m, Args&&...) {
-    checked.push_back(reinterpret_cast<void*>(&m));
-    return *this;
+  PluginASTAction::ActionType getActionType() override {
+    return AddBeforeMainAction;
   }
+
+  std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
+    clang::CompilerInstance &ci,
+    llvm::StringRef file
+  ) override;
+
+  void EndSourceFileAction() override;
+
+private:
+  clang::Rewriter rw_;
 };
 
-struct Serializer {
-  template <typename Arg, typename... Args>
-  Serializer& check(Arg& m, Args&&...) {
-    return *this;
-  }
-};
+} /* end namespace sanitizer */
 
-template <typename SerializerT, typename T>
-SerializerT& operator|(SerializerT& s, T& t) {
-  addr.push_back(reinterpret_cast<void*>(&t));
-  return s;
-}
-
-}} /* end namespace checkpoint::serializers */
-
-template <typename T, typename... Args>
-int testClass(std::string const& name, Args&&... args) {
-  using checkpoint::serializers::Serializer;
-  using checkpoint::serializers::Sanitizer;
-  using checkpoint::serializers::addr;
-  using checkpoint::serializers::checked;
-
-  auto t = std::make_unique<T>(std::forward<Args>(args)...);
-
-  // invoke regular serializer
-  Serializer s;
-  t->serialize(s);
-
-  // invoke sanitizer overload
-  Sanitizer c;
-  t->serialize(c);
-
-  int success = 1;
-
-  if (addr.size() != checked.size()) {
-    fprintf(
-      stderr,
-      "Failure %s: sanitized members do not match: %zu != %zu\n",
-      name.c_str(), addr.size(), checked.size()
-    );
-    success = 0;
-  }
-
-  for (std::size_t i = 0; i < addr.size(); i++) {
-    if (checked.size() > i and addr.at(i) != checked.at(i)) {
-      fprintf(stderr, "Failure %s: memory address does not match\n", name.c_str());
-      success = 0;
-    }
-  }
-
-  addr.clear();
-  checked.clear();
-
-  if (success) {
-    printf("Success %s: test passes!\n", name.c_str());
-    return 0;
-  } else {
-    return 1;
-  }
-}
-
-#endif /*INCLUDED_SANITIZER_TEST_COMMON_H*/
+#endif /*INCLUDED_SANITIZER_SANITIZER_H*/

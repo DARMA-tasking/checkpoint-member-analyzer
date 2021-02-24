@@ -1,0 +1,39 @@
+name: Sanitizer run (vt, clang-5.0, ubuntu)
+
+on:
+  push:
+    branches:
+      - develop
+      - master
+      - 1.*
+  pull_request:
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    env:
+      COMPILER: clang-5.0
+      BUILD_TYPE: release
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Docker Run sanitizer-base Image
+      shell: bash
+      run: |
+        docker-compose pull --ignore-pull-failures sanitizer-base &&
+        docker-compose run sanitizer-base
+    - name: Docker Pull vt-base Image
+      shell: bash
+      run: docker-compose pull --ignore-pull-failures vt-base
+    - name: Run sanitizer
+      shell: bash
+      run: |
+        docker-compose run vt-base | tee sanitizer.log
+    - name: Archive sanitizer log
+      uses: actions/upload-artifact@v2
+      with:
+        name: sanitizer.log
+        path: sanitizer.log

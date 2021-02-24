@@ -45,7 +45,6 @@
 #if !defined INCLUDED_SANITIZER_GENERATOR_H
 #define INCLUDED_SANITIZER_GENERATOR_H
 
-#include "common.h"
 #include "member_list.h"
 
 #include "clang/AST/ExprCXX.h"
@@ -70,7 +69,7 @@ struct Generator {
    * \param[in] members the list of fields in the class
    */
   virtual void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl* fn,
+    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
     MemberListType members
   ) = 0;
 
@@ -89,7 +88,7 @@ struct InlineGenerator : Generator {
   { }
 
   void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl* fn,
+    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
     MemberListType members
   ) override;
 
@@ -109,7 +108,7 @@ struct PartialSpecializationGenerator : Generator {
   { }
 
   void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl* fn,
+    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
     MemberListType members
   ) override;
 
@@ -125,7 +124,7 @@ private:
 struct SeperateGenerator : Generator {
 
   void run(
-    clang::CXXRecordDecl const* rd, clang::FunctionDecl* fn,
+    clang::CXXRecordDecl const* rd, clang::FunctionDecl const* fn,
     MemberListType members
   ) override;
 

@@ -6,7 +6,7 @@
 //                           DARMA Toolkit v. 1.0.0
 //                       DARMA/Serialization Sanitizer
 //
-// Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC
+// Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC
 // (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
@@ -42,43 +42,31 @@
 //@HEADER
 */
 
-// Declares clang::SyntaxOnlyAction.
-#include "clang/Frontend/FrontendActions.h"
-#include "clang/Tooling/CommonOptionsParser.h"
-#include "clang/Tooling/Tooling.h"
-// Declares llvm::cl::extrahelp.
-#include "llvm/Support/CommandLine.h"
-
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-
-#include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Frontend/CompilerInstance.h"
-
-#include <memory>
+#include "clang/Frontend/FrontendPluginRegistry.h"
 
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <memory>
+
 #include "generator.h"
+#include "sanitizer.h"
 #include "walk_record.h"
 
 using namespace clang;
-using namespace llvm;
-using namespace clang::tooling;
 using namespace clang::ast_matchers;
 
-static FILE* out = nullptr;
+namespace sanitizer {
 
-static cl::opt<std::string> Filename("o", cl::desc("Filename to output generated code"));
-static cl::list<std::string> Includes("I", cl::desc("Include directories"), cl::ZeroOrMore);
-static cl::opt<bool> GenerateInline("inline", cl::desc("Generate code inline and modify files"));
-static cl::opt<bool> OutputMainFile("include-input", cl::desc("Output input file with generated code"));
-static cl::opt<bool> IncludeVTHeader("Ivt", cl::desc("Include VT headers in generated code"));
+static FILE* out = stdout;
+static bool GenerateInline = false;
+static bool OutputMainFile = false;
 
-DeclarationMatcher RecordMatcher = cxxRecordDecl().bind("recordDecl");
-
-struct ClassFuncDeclRewriter : MatchFinder::MatchCallback {
-  explicit ClassFuncDeclRewriter(Rewriter& in_rw)
+struct SerializeRewriter : MatchFinder::MatchCallback {
+  explicit SerializeRewriter(Rewriter& in_rw)
     : rw(in_rw)
   { }
 
@@ -99,9 +87,19 @@ private:
   Rewriter& rw;
 };
 
-struct MyASTConsumer : ASTConsumer {
-  MyASTConsumer(Rewriter& in_rw) : record_handler(in_rw) {
-    matcher_.addMatcher(RecordMatcher, &record_handler);
+struct SanitizerASTConsumer : ASTConsumer {
+  SanitizerASTConsumer(Rewriter& in_rw) : record_handler(in_rw) {
+    // matches intrusive pattern
+    auto record_matcher =
+      cxxRecordDecl(
+        has(functionTemplateDecl(
+          hasName("serialize"), has(cxxMethodDecl(
+            parameterCountIs(1)
+          ).bind("serializeDecl"))
+        ))
+      ).bind("recordDecl");
+
+    matcher_.addMatcher(record_matcher, &record_handler);
   }
 
   void HandleTranslationUnit(ASTContext& Context) override {
@@ -110,83 +108,69 @@ struct MyASTConsumer : ASTConsumer {
   }
 
 private:
-  ClassFuncDeclRewriter record_handler;
+  SerializeRewriter record_handler;
   MatchFinder matcher_;
 };
 
-// For each source file provided to the tool, a new FrontendAction is created.
-struct MyFrontendAction : ASTFrontendAction {
-  void EndSourceFileAction() override {
-    //rw_.getEditBuffer(rw_.getSourceMgr().getMainFileID()).write(llvm::outs());
-    //rw_.getSourceMgr().getMainFileID()
 
-    auto& sm = rw_.getSourceMgr();
-    for (auto iter = rw_.buffer_begin(); iter != rw_.buffer_end(); ++iter) {
-      fmt::print(
-        stderr, "Modified file {}\n",
-        sm.getFileEntryForID(iter->first)->getName().str()
-      );
-    }
-
-    rw_.overwriteChangedFiles();
+bool SanitizerPluginAction::ParseArgs(
+  CompilerInstance const&, std::vector<std::string> const& args
+) {
+  // output input file with generated code
+  if (std::find(args.begin(), args.end(), "-include-input") != args.end()) {
+    OutputMainFile = true;
   }
 
-  std::unique_ptr<ASTConsumer>
-  CreateASTConsumer(CompilerInstance &CI, StringRef file) override {
-    rw_.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
-
-    if (OutputMainFile) {
-      auto buf = rw_.getSourceMgr().getBufferData(rw_.getSourceMgr().getMainFileID());
-      fmt::print(out, "{}", buf.str());
-    }
-
-    return llvm::make_unique<MyASTConsumer>(rw_);
+  // filename to output generated code
+  auto filename_opt = std::find(args.begin(), args.end(), "-o");
+  if (filename_opt != args.end()) {
+    out = fopen((++filename_opt)->c_str(), "w");
   }
 
-private:
-  Rewriter rw_;
-};
-
-// Apply a custom category to all command-line options so that they are the
-// only ones displayed.
-static cl::OptionCategory SerializeCheckerCategory("Serialize sanitizer");
-
-// CommonOptionsParser declares HelpMessage with a description of the common
-// command-line options related to the compilation database and input files.
-// It's nice to have this help message in all tools.
-static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
-
-// A help message for this specific tool can be added afterwards.
-static cl::extrahelp MoreHelp("\nGenerates sanitizer code for serializers\n");
-
-int main(int argc, const char **argv) {
-  CommonOptionsParser OptionsParser(argc, argv, SerializeCheckerCategory);
-
-  ClangTool Tool(
-    OptionsParser.getCompilations(), OptionsParser.getSourcePathList()
-  );
-
-  if (Filename == "") {
-    out = stdout;
-  } else {
-    out = fopen(Filename.c_str(), "w");
+  // generate code inline and modify files
+  if (std::find(args.begin(), args.end(), "-inline") != args.end()) {
+    GenerateInline = true;
   }
 
-  if (IncludeVTHeader) {
+  // include VT headers in generated code
+  if (std::find(args.begin(), args.end(), "-Ivt") != args.end()) {
     fmt::print(out, "#include <vt/transport.h>\n");
   }
 
-  for (auto&& e : Includes) {
-    auto str = std::string("-I") + e;
-    ArgumentsAdjuster ad1 = getInsertArgumentAdjuster(str.c_str());
-    Tool.appendArgumentsAdjuster(ad1);
-    fmt::print(stderr, "Including {}\n", e);
+  return true;
+}
+
+std::unique_ptr<ASTConsumer> SanitizerPluginAction::CreateASTConsumer(
+  CompilerInstance &ci, StringRef file
+) {
+  rw_.setSourceMgr(ci.getSourceManager(), ci.getLangOpts());
+
+  if (OutputMainFile) {
+    auto buf = rw_.getSourceMgr().getBufferData(rw_.getSourceMgr().getMainFileID());
+    fmt::print(out, "{}", buf.str());
   }
 
-  Tool.run(newFrontendActionFactory<MyFrontendAction>().get());
+  return std::make_unique<SanitizerASTConsumer>(rw_);
+}
 
-  if (Filename == "" and out != nullptr) {
+void SanitizerPluginAction::EndSourceFileAction() {
+  auto& sm = rw_.getSourceMgr();
+  for (auto iter = rw_.buffer_begin(); iter != rw_.buffer_end(); ++iter) {
+    fmt::print(
+      stderr, "Modified file {}\n",
+      sm.getFileEntryForID(iter->first)->getName().str()
+    );
+  }
+
+  rw_.overwriteChangedFiles();
+  if (out != stdout) {
     fclose(out);
   }
-  return 0;
 }
+
+} /* end namespace sanitizer */
+
+// register the plugin
+static FrontendPluginRegistry::Add<sanitizer::SanitizerPluginAction>
+    X(/*Name=*/"sanitizer",
+      /*Desc=*/"Serialization Sanitizer");

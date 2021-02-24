@@ -2,11 +2,11 @@
 //@HEADER
 // *****************************************************************************
 //
-//                                test-common.h
+//                                  plugin.h
 //                           DARMA Toolkit v. 1.0.0
 //                       DARMA/Serialization Sanitizer
 //
-// Copyright 2019 National Technology & Engineering Solutions of Sandia, LLC
+// Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC
 // (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
@@ -42,85 +42,38 @@
 //@HEADER
 */
 
-#if !defined INCLUDED_SANITIZER_TEST_COMMON_H
-#define INCLUDED_SANITIZER_TEST_COMMON_H
+#if !defined INCLUDED_SANITIZER_PLUGIN_PLUGIN_H
+#define INCLUDED_SANITIZER_PLUGIN_PLUGIN_H
 
-#include <vector>
-#include <string>
-#include <memory>
+#include "clang/AST/ASTConsumer.h"
+#include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
 
-namespace checkpoint { namespace serializers {
+namespace plugin {
 
-std::vector<void*> addr;
-std::vector<void*> checked;
-
-struct Sanitizer {
-  template <typename Arg, typename... Args>
-  Sanitizer& check(Arg& m, Args&&...) {
-    checked.push_back(reinterpret_cast<void*>(&m));
-    return *this;
-  }
+/**
+ * \struct SanitizerMatcher
+ *
+ * \brief Checks if all fields are serialized in a matched `serialize` function.
+ *
+ * \note This is a compile time, static check.
+ */
+struct SanitizerMatcher : public clang::ast_matchers::MatchFinder::MatchCallback {
+  void run(clang::ast_matchers::MatchFinder::MatchResult const&) override;
 };
 
-struct Serializer {
-  template <typename Arg, typename... Args>
-  Serializer& check(Arg& m, Args&&...) {
-    return *this;
+struct SanitizerASTConsumer : public clang::ASTConsumer {
+  SanitizerASTConsumer();
+
+  void HandleTranslationUnit(clang::ASTContext& ctx) override {
+    finder_.matchAST(ctx);
   }
+
+private:
+  clang::ast_matchers::MatchFinder finder_;
+  SanitizerMatcher callback_;
 };
 
-template <typename SerializerT, typename T>
-SerializerT& operator|(SerializerT& s, T& t) {
-  addr.push_back(reinterpret_cast<void*>(&t));
-  return s;
-}
+} /* end namespace plugin */
 
-}} /* end namespace checkpoint::serializers */
-
-template <typename T, typename... Args>
-int testClass(std::string const& name, Args&&... args) {
-  using checkpoint::serializers::Serializer;
-  using checkpoint::serializers::Sanitizer;
-  using checkpoint::serializers::addr;
-  using checkpoint::serializers::checked;
-
-  auto t = std::make_unique<T>(std::forward<Args>(args)...);
-
-  // invoke regular serializer
-  Serializer s;
-  t->serialize(s);
-
-  // invoke sanitizer overload
-  Sanitizer c;
-  t->serialize(c);
-
-  int success = 1;
-
-  if (addr.size() != checked.size()) {
-    fprintf(
-      stderr,
-      "Failure %s: sanitized members do not match: %zu != %zu\n",
-      name.c_str(), addr.size(), checked.size()
-    );
-    success = 0;
-  }
-
-  for (std::size_t i = 0; i < addr.size(); i++) {
-    if (checked.size() > i and addr.at(i) != checked.at(i)) {
-      fprintf(stderr, "Failure %s: memory address does not match\n", name.c_str());
-      success = 0;
-    }
-  }
-
-  addr.clear();
-  checked.clear();
-
-  if (success) {
-    printf("Success %s: test passes!\n", name.c_str());
-    return 0;
-  } else {
-    return 1;
-  }
-}
-
-#endif /*INCLUDED_SANITIZER_TEST_COMMON_H*/
+#endif /*INCLUDED_SANITIZER_PLUGIN_PLUGIN_H*/
