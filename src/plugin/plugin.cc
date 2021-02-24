@@ -99,7 +99,7 @@ std::unordered_set<FieldDecl const*>getSerializedFields(
   FunctionDecl const* function
 ) {
   std::unordered_set<FieldDecl const*> serialized;
-  for (auto child : function->getBody()->children()) {
+  for (auto&& child : function->getBody()->children()) {
     BinaryOperator const* bo = dyn_cast<BinaryOperator>(child);
     if (not bo or bo->getOpcode() != BinaryOperator::Opcode::BO_Or) {
       continue;
@@ -118,6 +118,31 @@ std::unordered_set<FieldDecl const*>getSerializedFields(
   return serialized;
 }
 
+std::unordered_set<FieldDecl const*>getSkippedFields(
+  FunctionDecl const* function
+) {
+  std::unordered_set<FieldDecl const*> skipped;
+  for (auto&& child : function->getBody()->children()) {
+    auto ce = dyn_cast<CallExpr>(child);
+    if (not ce or ce->getNumArgs() != 1) {
+      continue;
+    }
+
+    auto de = dyn_cast<CXXDependentScopeMemberExpr>(*(ce->child_begin()));
+    if (not de or de->getMemberNameInfo().getName().getAsString() != "skip") {
+      continue;
+    }
+
+    auto member = dyn_cast<MemberExpr>(ce->getArg(0));
+    auto field = dyn_cast<FieldDecl>(member->getMemberDecl());
+    if (field) {
+      skipped.insert(field->getFirstDecl());
+    }
+  }
+
+  return skipped;
+}
+
 CXXRecordDecl const * getRecord(MatchFinder::MatchResult const& result) {
   auto record = result.Nodes.getNodeAs<CXXRecordDecl>("record");
   if (record) {
@@ -131,7 +156,6 @@ CXXRecordDecl const * getRecord(MatchFinder::MatchResult const& result) {
   }
 
   auto param = result.Nodes.getNodeAs<ParmVarDecl>("parameter");
-  param->getType()->dump();
   record = param->getType()->getPointeeCXXRecordDecl();
   if (record) {
     // void serialize(SerializerT& s, Foo& obj) { ... }
@@ -153,14 +177,16 @@ void SanitizerMatcher::run(MatchFinder::MatchResult const& result) {
     return;
   }
   auto serialized = getSerializedFields(function);
+  auto skipped = getSkippedFields(function);
 
   auto record = getRecord(result);
   if (not record or record->isUnion()) {
     return;
   }
 
-  for (auto field : record->fields()) {
-    if (serialized.find(field->getFirstDecl()) == serialized.end()) {
+  for (auto&& field : record->fields()) {
+    if (serialized.find(field->getFirstDecl()) == serialized.end()
+      and skipped.find(field->getFirstDecl()) == skipped.end()) {
       printWarning(field);
     }
   }
